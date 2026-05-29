@@ -50,22 +50,15 @@ extension Runtime {
         in list: JobList,
         claimingVP vp: VirtualProcessor?
     ) -> AnyJob? {
-        list.lock()
-        defer { list.unlock() }
-
-        if list.isEmpty { return nil }
-
-        for entry in list.reversedSnapshot {
+        list.firstMatchReversed { entry in
             if claimIfMatches(entry, match, claimingVP: vp) {
                 return entry
             }
             if !entry.children.isEmpty {
-                if let found = searchJobs(match, in: entry.children, claimingVP: vp) {
-                    return found
-                }
+                return searchJobs(match, in: entry.children, claimingVP: vp)
             }
+            return nil
         }
-        return nil
     }
 
     /// Runs `job` inline on `vp`'s call stack: marks it `.executing`, pushes it
@@ -107,6 +100,25 @@ extension Runtime {
         }
     }
 
+    /// Atomically claims an unassigned `job` for `vp` (`.unassigned → .assigned`,
+    /// owner set from affinity). Returns `false` if it was already claimed or its
+    /// `.specific` affinity excludes `vp`. The single claim path used by both the
+    /// worker search and the join helping loop.
+    func claim(_ job: AnyJob, for vp: VirtualProcessor?) -> Bool {
+        job.completion.lock()
+        defer { job.completion.unlock() }
+        guard job.status == .unassigned else { return false }
+        switch job.affinity {
+        case .any:
+            job.owner = vp
+        case let .specific(logicalId):
+            if let vp, vp.id != logicalId { return false }
+            job.owner = vp ?? findVP(id: logicalId)
+        }
+        job.status = .assigned
+        return true
+    }
+
     // MARK: - Private
 
     private func claimIfMatches(
@@ -116,22 +128,9 @@ extension Runtime {
     ) -> Bool {
         switch match {
         case let .id(wanted):
-            return entry.id == wanted
+            entry.id == wanted
         case .unassigned:
-            entry.completion.lock()
-            defer { entry.completion.unlock() }
-            guard entry.status == .unassigned else { return false }
-            if case let .specific(logicalId) = entry.affinity, let vp, vp.id != logicalId {
-                return false
-            }
-            entry.status = .assigned
-            switch entry.affinity {
-            case .any:
-                entry.owner = vp
-            case let .specific(logicalId):
-                entry.owner = vp ?? findVP(id: logicalId)
-            }
-            return true
+            claim(entry, for: vp)
         }
     }
 }

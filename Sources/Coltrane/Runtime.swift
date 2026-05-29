@@ -36,13 +36,20 @@ package final class Runtime: @unchecked Sendable {
     // MARK: - Nested types
 
     /// Where a joining processor looks for pending work to help with.
+    ///
+    /// Helped work runs inline on the joining thread's call stack, so a strategy
+    /// that can reach work outside the joined job's subtree
+    /// (`anywhere`/`currentSubtree`) can deepen that stack beyond the program's
+    /// own recursion on deep fork/join — risking overflow. `joinedSubtree`
+    /// bounds the extra depth to the joined subtree and is the safe default.
     package enum HelpingStrategy {
 
         /// Help with any pending job anywhere in the graph. Best for flat,
-        /// data-parallel fan-out.
+        /// data-parallel fan-out; may grow the joining thread's stack on deep
+        /// recursive workloads.
         case anywhere
         /// Help only within the subtree of the job currently running on this
-        /// processor.
+        /// processor; may grow the joining thread's stack on deep recursion.
         case currentSubtree
         /// Help only within the subtree of the job being joined. The default;
         /// bounds extra stack growth to that subtree's depth.
@@ -79,9 +86,10 @@ package final class Runtime: @unchecked Sendable {
             defer { stateLock.unlock() }
             return _helpingStrategy
         }
-        set { stateLock.lock()
+        set {
+            stateLock.lock()
+            defer { stateLock.unlock() }
             _helpingStrategy = newValue
-            stateLock.unlock()
         }
     }
 
@@ -162,6 +170,12 @@ package final class Runtime: @unchecked Sendable {
         options: JobOptions = .init(),
         _ body: @escaping () -> T
     ) -> JobHandle<T> {
+        if case let .specific(id) = options.affinity {
+            precondition(
+                findVP(id: id) != nil,
+                "Coltrane: spawn requested .specific(\(id)) affinity, but no virtual processor has that id"
+            )
+        }
         let job = Job<T>(id: nextJobIdentifier(), options: options, body: body)
         job.status = .unassigned
         storeJob(job, currentVP: currentVP())
@@ -227,9 +241,7 @@ package final class Runtime: @unchecked Sendable {
                 )
             }
         }
-        while !list.isEmpty {
-            list.removeFirstMatching { _ in true }
-        }
+        list.removeAll()
         return leaked
     }
 }

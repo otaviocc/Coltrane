@@ -40,10 +40,11 @@ extension Runtime {
 
         job.completion.lock()
         job.status = .joined
+        job.options.maxJoins -= 1
+        let shouldRemove = job.options.maxJoins <= 0 && removeJobsEnabled
         job.completion.unlock()
 
-        job.options.maxJoins -= 1
-        if job.options.maxJoins <= 0, removeJobsEnabled {
+        if shouldRemove {
             job.parentList?.remove(job, reparentingChildren: true)
         }
     }
@@ -64,7 +65,7 @@ extension Runtime {
     func isComplete(_ job: AnyJob) -> Bool {
         job.completion.lock()
         defer { job.completion.unlock() }
-        return job.status == .done || job.status == .joined
+        return job.isFinishedLocked
     }
 
     // MARK: - Private
@@ -74,7 +75,7 @@ extension Runtime {
             if isComplete(target) { return }
 
             if let vp {
-                if tryClaim(target, on: vp) {
+                if claim(target, for: vp) {
                     executeJob(target, on: vp)
                     continue
                 }
@@ -87,19 +88,9 @@ extension Runtime {
         }
     }
 
-    private func tryClaim(_ job: AnyJob, on vp: VirtualProcessor) -> Bool {
-        job.completion.lock()
-        defer { job.completion.unlock() }
-        guard job.status == .unassigned else { return false }
-        if case let .specific(logicalId) = job.affinity, vp.id != logicalId { return false }
-        job.status = .assigned
-        job.owner = vp
-        return true
-    }
-
     private func waitBriefly(for job: AnyJob) {
         job.completion.lock()
-        if job.status != .done, job.status != .joined {
+        if !job.isFinishedLocked {
             job.completion.wait(until: Date().addingTimeInterval(Runtime.idlePollInterval))
         }
         job.completion.unlock()

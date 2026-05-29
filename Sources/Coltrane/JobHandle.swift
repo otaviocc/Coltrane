@@ -33,9 +33,7 @@ package struct JobHandle<T: Sendable> {
 
     /// Whether the job has finished producing its result.
     package var isComplete: Bool {
-        job.completion.lock()
-        defer { job.completion.unlock() }
-        return job.status == .done || job.status == .joined
+        Runtime.shared.isComplete(job)
     }
 
     // MARK: - Public

@@ -49,10 +49,6 @@ package struct JobOptions {
     package var maxJoins = 1
     /// Which virtual processor the job must run on. Defaults to `.any`.
     package var affinity: ProcessorAffinity = .any
-    /// Estimated relative compute cost. Advisory; reserved for scheduling.
-    package var executionCost = 0
-    /// Estimated relative communication cost. Advisory; reserved for scheduling.
-    package var communicationCost = 0
 
     // MARK: - Life cycle
 

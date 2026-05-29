@@ -83,6 +83,28 @@ final class JobList: @unchecked Sendable {
         _lock.unlock()
     }
 
+    /// Walks the list newest-first under the lock, returning the first non-nil
+    /// result of `match`. Avoids copying the backing array on the search hot
+    /// path; the lock is held for the whole walk (and any recursion `match`
+    /// performs into child lists).
+    func firstMatchReversed(_ match: (AnyJob) -> AnyJob?) -> AnyJob? {
+        _lock.lock()
+        defer { _lock.unlock() }
+        var index = storage.count - 1
+        while index >= 0 {
+            if let found = match(storage[index]) { return found }
+            index -= 1
+        }
+        return nil
+    }
+
+    /// Removes every job from the list in one locked operation.
+    func removeAll() {
+        _lock.lock()
+        storage.removeAll()
+        _lock.unlock()
+    }
+
     /// Removes the first job matching `predicate`, returning whether one was
     /// found and removed.
     @discardableResult
@@ -113,6 +135,7 @@ final class JobList: @unchecked Sendable {
                 for child in survivors {
                     child.parentList = self
                 }
+                job.children.removeAll()
             }
         }
         if let removeIdx = storage.firstIndex(where: { $0 === job }) {

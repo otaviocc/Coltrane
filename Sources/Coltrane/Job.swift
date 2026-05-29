@@ -73,6 +73,15 @@ protocol AnyJob: AnyObject {
     func run()
 }
 
+extension AnyJob {
+
+    /// Whether the job has reached a terminal state (`.done` or `.joined`).
+    /// Must be read with `completion` held.
+    var isFinishedLocked: Bool {
+        status == .done || status == .joined
+    }
+}
+
 /// A unit of work in the runtime: a closure plus its task-graph bookkeeping.
 ///
 /// `@unchecked Sendable` is deliberate — the type coordinates its own
