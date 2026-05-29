@@ -30,6 +30,61 @@ Below the cutoff, the function recurses directly instead of spawning. A task tha
 
 The core invariant: the result is **independent of the VP count**. `fibonacci(35)` is `9227465` on 1, 2, 4, or 8 VPs.
 
+## How it works
+
+The runtime holds a fixed pool of Virtual Processors (real OS threads) that share one task DAG. `spawn` adds a node to the graph; any idle VP — or a VP that is currently joining — claims a pending node and runs it, so work flows to whichever thread is free.
+
+```mermaid
+flowchart TB
+    subgraph RT["Runtime.shared"]
+        subgraph VPs["Virtual Processors — one OS thread each"]
+            direction LR
+            VP0["VP 0<br/>(main thread)"]
+            VP1["VP 1"]
+            VP2["VP 2"]
+            VP3["VP 3"]
+        end
+        subgraph DAG["Task DAG (shared, lock-protected)"]
+            ROOT["fib(35)"]
+            C1["fib(34)"]
+            C2["fib(33)"]
+            G1["fib(33)"]
+            G2["fib(32)"]
+            ROOT --> C1
+            ROOT --> C2
+            C1 --> G1
+            C1 --> G2
+        end
+    end
+    VP0 -. claim and run .-> ROOT
+    VP1 -. claim and run .-> C1
+    VP2 -. claim and run .-> C2
+    VP3 -. help .-> G1
+```
+
+A joining VP never blocks while there is work to do: joining a task that another VP is already running, it helps by running other pending tasks, and only parks (briefly) once the subtree is fully in flight elsewhere. Here is a two-VP run of `a.join() + b.join()` from inside one `fibonacci` call:
+
+```mermaid
+sequenceDiagram
+    participant M as VP 0 (main)
+    participant G as Task DAG
+    participant W as VP 1 (worker)
+
+    Note over M: running fibonacci(n)
+    M->>G: spawn a = fib(n-1)
+    M->>G: spawn b = fib(n-2)
+    W->>G: claim b
+    activate W
+    Note over W: run b
+    M->>G: a.join() — a still unassigned
+    Note over M: claim a, run it inline
+    M->>G: b.join() — b is running on VP 1
+    Note over M: no other work to help → wait for b
+    W-->>M: b done (signal)
+    deactivate W
+    Note over M: return a + b
+```
+
 ## API
 
 - `Runtime.shared.initialize(maxVPs:)` / `terminate()`: start and stop the runtime. The calling thread becomes VP 0.
