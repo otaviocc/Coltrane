@@ -69,6 +69,20 @@ final class DAGTests: XCTestCase {
         // Parent gone; children spliced into the root list at its old position.
         XCTAssertEqual(Set(root.snapshot.map(\.id)), [21, 22])
         XCTAssertIdentical(child1.parentList, root)
+        // Survivors are moved, not copied: they no longer live in parent.children.
+        XCTAssertTrue(parent.children.snapshot.isEmpty)
+    }
+
+    func testRemoveAllEmptiesList() {
+        let list = JobList()
+        list.append(Job<Int>(id: 1, options: .init()) { 0 })
+        list.append(Job<Int>(id: 2, options: .init()) { 0 })
+        XCTAssertEqual(list.count, 2)
+
+        list.removeAll()
+
+        XCTAssertTrue(list.isEmpty)
+        XCTAssertEqual(list.count, 0)
     }
 
     func testSpawnAttachesChildToCurrentJob() throws {

@@ -69,6 +69,24 @@ final class JoinSemanticsTests: XCTestCase {
         runtime.terminate()
     }
 
+    func testConcurrentJoinsOnSharedHandleStayCorrect() {
+        // maxJoins = 2 lets two threads join the same job. The count decrement
+        // and removal decision now happen under the job's lock, so concurrent
+        // joins can't lose-update the count or double-remove. Stress the path.
+        for _ in 0..<50 {
+            let runtime = Runtime.shared
+            runtime.initialize(maxVPs: 4)
+            var opts = JobOptions()
+            opts.maxJoins = 2
+            let h = runtime.spawn(options: opts) { 21 + 21 }
+
+            DispatchQueue.concurrentPerform(iterations: 2) { _ in
+                XCTAssertEqual(h.join(), 42)
+            }
+            XCTAssertEqual(runtime.terminate(), 0)
+        }
+    }
+
     func testAssignedToExecutingFallThroughUnderContention() {
         // Many coarse tasks across several VPs exercise the path where a joined
         // job is assigned-to-another-VP / executing: join must help + wait, not

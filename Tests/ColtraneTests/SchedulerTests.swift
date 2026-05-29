@@ -87,6 +87,50 @@ final class SchedulerTests: XCTestCase {
         runtime.terminate()
     }
 
+    func testClaimAssignsUnassignedJobOnce() {
+        let runtime = Runtime.shared
+        runtime.initialize(maxVPs: 1)
+        let vp = VirtualProcessor(id: 7, isMain: false, runtime: runtime)
+        let job = Job<Int>(id: 1, options: .init()) { 0 }
+
+        XCTAssertTrue(runtime.claim(job, for: vp))
+        XCTAssertEqual(job.status, .assigned)
+        XCTAssertIdentical(job.owner, vp)
+        // A second claim fails — no two processors ever run the same job.
+        XCTAssertFalse(runtime.claim(job, for: vp))
+        runtime.terminate()
+    }
+
+    func testClaimRespectsSpecificAffinity() {
+        let runtime = Runtime.shared
+        runtime.initialize(maxVPs: 1)
+        var opts = JobOptions()
+        opts.affinity = .specific(2)
+        let job = Job<Int>(id: 1, options: opts) { 0 }
+        let vp1 = VirtualProcessor(id: 1, isMain: false, runtime: runtime)
+        let vp2 = VirtualProcessor(id: 2, isMain: false, runtime: runtime)
+
+        // A non-matching processor cannot claim it; it stays unassigned.
+        XCTAssertFalse(runtime.claim(job, for: vp1))
+        XCTAssertEqual(job.status, .unassigned)
+        // The matching processor can.
+        XCTAssertTrue(runtime.claim(job, for: vp2))
+        XCTAssertIdentical(job.owner, vp2)
+        runtime.terminate()
+    }
+
+    func testSpecificAffinityJobRunsAndJoins() {
+        // End-to-end: a job pinned to a valid VP id is routed there, runs, and
+        // joins to the right result.
+        let runtime = Runtime.shared
+        runtime.initialize(maxVPs: 4) // VP ids 0...3
+        var opts = JobOptions()
+        opts.affinity = .specific(2)
+        let h = runtime.spawn(options: opts) { 6 * 7 }
+        XCTAssertEqual(h.join(), 42)
+        runtime.terminate()
+    }
+
     func testEachHelpingStrategyProducesCorrectResult() {
         // Result must be independent of the search policy.
         for strategy in [Runtime.HelpingStrategy.anywhere, .currentSubtree, .joinedSubtree] {
