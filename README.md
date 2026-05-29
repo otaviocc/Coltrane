@@ -4,6 +4,8 @@ A Swift runtime that builds on the ideas of **Anahy**, the multithreaded schedul
 
 You write `spawn`/`join` and never reason about cores or thread pools. The runtime builds a [**DAG**](https://en.wikipedia.org/wiki/Directed_acyclic_graph) of tasks implicitly from the nesting of `spawn` calls and schedules it onto a fixed pool of **Virtual Processors**, each a real OS thread with the pool sized to the core count by default, using **work-helping**: an idle or joining VP executes pending descendant tasks itself rather than blocking.
 
+In other words, you focus on describing the concurrency of your application instead of having to worry about the parallelism your hardware supports or allows.
+
 > This is a deliberate alternative to Swift Structured Concurrency. The core is built on raw threads and locks (`Thread`, `NSCondition`, `NSRecursiveLock`, `DispatchSemaphore`). There is no `async`/`await`, no actors, and no stack switching. Jobs run inline on a VP's real call stack.
 
 ## Example
