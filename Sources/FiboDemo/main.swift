@@ -60,8 +60,8 @@ func fibonacciColtrane(_ n: Int) -> Int {
     guard n > 1 else { return n }
     if n <= cutoff { return fibonacciSequential(n) }
 
-    let a = Runtime.shared.spawn { fibonacciColtrane(n - 1) } // athread_create
-    let b = Runtime.shared.spawn { fibonacciColtrane(n - 2) }
+    let a = Coltrane.shared.spawn { fibonacciColtrane(n - 1) } // athread_create
+    let b = Coltrane.shared.spawn { fibonacciColtrane(n - 2) }
     return a.join() + b.join() // athread_join × 2
 }
 
@@ -98,11 +98,11 @@ let sequential = fibonacciSequential(n)
 report("sequential", result: sequential, since: seqStart)
 
 // 2. Coltrane spawn/join
-Runtime.shared.initialize(maxVPs: maxVPs)
+Coltrane.shared.initialize(maxVPs: maxVPs)
 let coltraneStart = Date()
-let coltrane = Runtime.shared.spawn { fibonacciColtrane(n) }.join()
+let coltrane = Coltrane.shared.spawn { fibonacciColtrane(n) }.join()
 report("coltrane (\(maxVPs) VP)", result: coltrane, since: coltraneStart)
-Runtime.shared.terminate()
+Coltrane.shared.terminate()
 
 // 3. Swift async/await
 let asyncStart = Date()

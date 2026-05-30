@@ -28,8 +28,8 @@ import XCTest
 func fibonacci(_ n: Int) -> Int {
     guard n > 1 else { return n }
     if n <= 20 { return fibonacci(n - 1) + fibonacci(n - 2) }
-    let a = Runtime.shared.spawn { fibonacci(n - 1) }
-    let b = Runtime.shared.spawn { fibonacci(n - 2) }
+    let a = Coltrane.shared.spawn { fibonacci(n - 1) }
+    let b = Coltrane.shared.spawn { fibonacci(n - 2) }
     return a.join() + b.join()
 }
 
@@ -37,7 +37,7 @@ final class FibonacciTests: XCTestCase {
 
     func testFibonacci35IndependentOfVPCount() {
         for vps in [1, 2, 4, 8] {
-            let runtime = Runtime.shared
+            let runtime = Coltrane.shared
             runtime.initialize(maxVPs: vps)
             let result = runtime.spawn { fibonacci(35) }.join()
             XCTAssertEqual(result, 9_227_465, "fibonacci(35) on \(vps) VPs")
@@ -49,7 +49,7 @@ final class FibonacciTests: XCTestCase {
     func testMultiVPNotSlowerThanSingleVP() {
         /// Coarse-grained scaling smoke test (not a strict speedup guarantee).
         func wall(_ vps: Int) -> TimeInterval {
-            let runtime = Runtime.shared
+            let runtime = Coltrane.shared
             runtime.initialize(maxVPs: vps)
             let start = Date()
             _ = runtime.spawn { fibonacci(34) }.join()

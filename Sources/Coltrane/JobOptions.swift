@@ -24,7 +24,7 @@ import Foundation
 
 /// Scheduling attributes for a spawned job.
 ///
-/// Pass an instance to `Runtime.spawn(options:_:)` to control how the job is
+/// Pass an instance to `Coltrane.spawn(options:_:)` to control how the job is
 /// joined and placed. The defaults match an ordinary joinable task.
 package struct JobOptions {
 

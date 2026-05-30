@@ -29,9 +29,9 @@ import Foundation
 ///
 /// Programs describe concurrency by spawning jobs and joining their handles;
 /// the runtime maps that work onto real threads using work-helping. Use the
-/// shared instance via `Runtime.shared`. `@unchecked Sendable` because all
+/// shared instance via `Coltrane.shared`. `@unchecked Sendable` because all
 /// shared state is guarded by `stateLock` or by a `JobList`'s own lock.
-package final class Runtime: @unchecked Sendable {
+package final class Coltrane: @unchecked Sendable {
 
     // MARK: - Nested types
 
@@ -59,7 +59,7 @@ package final class Runtime: @unchecked Sendable {
     // MARK: - Properties
 
     /// The shared runtime instance — the singleton used throughout the package.
-    package static let shared = Runtime()
+    package static let shared = Coltrane()
 
     /// How long an idle processor parks before re-checking for work, in seconds.
     static let idlePollInterval: TimeInterval = 0.001

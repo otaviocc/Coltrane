@@ -35,7 +35,7 @@ enum MatchCondition {
 }
 
 /// Work-finding and job execution: the heart of the scheduler.
-extension Runtime {
+extension Coltrane {
 
     // MARK: - Public
 

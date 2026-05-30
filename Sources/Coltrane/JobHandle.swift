@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A typed handle to a spawned job, returned by `Runtime.spawn`.
+/// A typed handle to a spawned job, returned by `Coltrane.spawn`.
 ///
 /// The handle holds a strong reference to its underlying job, so `join()` and
 /// `fetch()` can always resolve it. `T` is the type the job produces.
@@ -33,7 +33,7 @@ package struct JobHandle<T: Sendable> {
 
     /// Whether the job has finished producing its result.
     package var isComplete: Bool {
-        Runtime.shared.isComplete(job)
+        Coltrane.shared.isComplete(job)
     }
 
     // MARK: - Public
@@ -42,7 +42,7 @@ package struct JobHandle<T: Sendable> {
     /// job — or other pending work — on the calling processor in the meantime.
     @discardableResult
     package func join() -> T {
-        Runtime.shared.join(job)
+        Coltrane.shared.join(job)
         return job.storedResult
     }
 
@@ -50,7 +50,7 @@ package struct JobHandle<T: Sendable> {
     /// work, leaving the job in the graph.
     @discardableResult
     package func fetch() -> T {
-        Runtime.shared.fetch(job)
+        Coltrane.shared.fetch(job)
         return job.storedResult
     }
 }

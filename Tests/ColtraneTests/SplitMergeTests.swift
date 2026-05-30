@@ -28,7 +28,7 @@ import XCTest
 final class SplitMergeTests: XCTestCase {
 
     func testSplitMergeMatchesSequential() {
-        let runtime = Runtime.shared
+        let runtime = Coltrane.shared
         runtime.initialize(maxVPs: 4)
 
         let data = 100
@@ -50,7 +50,7 @@ final class SplitMergeTests: XCTestCase {
     }
 
     func testSplitFactorOne() {
-        let runtime = Runtime.shared
+        let runtime = Coltrane.shared
         runtime.initialize(maxVPs: 2)
         let h = runtime.spawnSplit(
             data: 5, splitFactor: 1,

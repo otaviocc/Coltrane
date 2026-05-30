@@ -16,14 +16,14 @@ import Coltrane
 func fibonacci(_ n: Int) -> Int {
     guard n > 1 else { return n }
     if n <= 20 { return fibonacci(n - 1) + fibonacci(n - 2) } // sequential cutoff
-    let a = Runtime.shared.spawn { fibonacci(n - 1) }
-    let b = Runtime.shared.spawn { fibonacci(n - 2) }
+    let a = Coltrane.shared.spawn { fibonacci(n - 1) }
+    let b = Coltrane.shared.spawn { fibonacci(n - 2) }
     return a.join() + b.join()
 }
 
-Runtime.shared.initialize(maxVPs: 4)
-print(Runtime.shared.spawn { fibonacci(35) }.join())
-Runtime.shared.terminate()
+Coltrane.shared.initialize(maxVPs: 4)
+print(Coltrane.shared.spawn { fibonacci(35) }.join())
+Coltrane.shared.terminate()
 ```
 
 Below the cutoff, the function recurses directly instead of spawning. A task that small costs more to schedule than to compute, so splitting only pays off for the coarser upper levels of the tree. Tune the threshold to the work per task. This is not specific to Coltrane. Every task runtime (including `async`/`await`) needs a cutoff for fine-grained recursion.
@@ -36,7 +36,7 @@ The runtime holds a fixed pool of Virtual Processors (real OS threads) that shar
 
 ```mermaid
 flowchart TB
-    subgraph RT["Runtime.shared"]
+    subgraph RT["Coltrane.shared"]
         subgraph VPs["Virtual Processors — one OS thread each"]
             direction LR
             VP0["VP 0<br/>(main thread)"]
@@ -87,14 +87,14 @@ sequenceDiagram
 
 ## API
 
-- `Runtime.shared.initialize(maxVPs:)` / `terminate()`: start and stop the runtime. The calling thread becomes VP 0.
+- `Coltrane.shared.initialize(maxVPs:)` / `terminate()`: start and stop the runtime. The calling thread becomes VP 0.
 - `spawn(options:_:) -> JobHandle<T>`: create a task, returning a handle to its eventual result.
 - `JobHandle<T>.join() -> T`: wait for the result, helping run pending work in the meantime.
 - `JobHandle<T>.fetch() -> T`: wait for the result without contributing work.
 - `JobHandle<T>.isComplete`: whether the result is ready.
 - `spawnSplit(data:splitFactor:split:merge:_:)`: fan a value into sub-tasks and merge their results.
 - `JobOptions`: per-task options: `maxJoins`, `detachState`, and `affinity` (`ProcessorAffinity`).
-- `Runtime.shared.helpingStrategy`: `.anywhere` / `.currentSubtree` / `.joinedSubtree` (default): where a joining VP looks for work to help with.
+- `Coltrane.shared.helpingStrategy`: `.anywhere` / `.currentSubtree` / `.joinedSubtree` (default): where a joining VP looks for work to help with.
 
 ## Build and Test
 

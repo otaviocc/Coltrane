@@ -48,12 +48,12 @@ final class VirtualProcessor: @unchecked Sendable {
     private let idle = NSCondition()
     private let finished = DispatchSemaphore(value: 0)
     private var thread: Thread?
-    private unowned let runtime: Runtime
+    private unowned let runtime: Coltrane
 
     // MARK: - Life cycle
 
     /// Creates a processor with the given id, bound to `runtime`.
-    init(id: Int, isMain: Bool, runtime: Runtime) {
+    init(id: Int, isMain: Bool, runtime: Coltrane) {
         self.id = id
         self.isMain = isMain
         self.runtime = runtime
@@ -105,7 +105,7 @@ final class VirtualProcessor: @unchecked Sendable {
 
     private func idleWait() {
         idle.lock()
-        idle.wait(until: Date().addingTimeInterval(Runtime.idlePollInterval))
+        idle.wait(until: Date().addingTimeInterval(Coltrane.idlePollInterval))
         idle.unlock()
     }
 

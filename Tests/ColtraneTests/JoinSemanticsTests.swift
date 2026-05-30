@@ -28,7 +28,7 @@ import XCTest
 final class JoinSemanticsTests: XCTestCase {
 
     func testJoinUnassignedExecutesInline() {
-        let runtime = Runtime.shared
+        let runtime = Coltrane.shared
         runtime.initialize(maxVPs: 1) // forces unassigned + inline execution
         let h = runtime.spawn { 21 + 21 }
         XCTAssertEqual(h.join(), 42)
@@ -36,7 +36,7 @@ final class JoinSemanticsTests: XCTestCase {
     }
 
     func testJoinReturnsResultWhenAlreadyDone() {
-        let runtime = Runtime.shared
+        let runtime = Coltrane.shared
         runtime.initialize(maxVPs: 1)
         let h = runtime.spawn { 99 }
         XCTAssertEqual(h.join(), 99) // first join executes + completes
@@ -45,7 +45,7 @@ final class JoinSemanticsTests: XCTestCase {
     }
 
     func testMaxJoinsKeepsJobUntilExhausted() {
-        let runtime = Runtime.shared
+        let runtime = Coltrane.shared
         runtime.initialize(maxVPs: 1)
         runtime.removeJobsEnabled = true
 
@@ -61,7 +61,7 @@ final class JoinSemanticsTests: XCTestCase {
     }
 
     func testFetchWaitsWithoutRemoving() {
-        let runtime = Runtime.shared
+        let runtime = Coltrane.shared
         runtime.initialize(maxVPs: 4)
         let h = runtime.spawn { 123 }
         XCTAssertEqual(h.fetch(), 123)
@@ -74,7 +74,7 @@ final class JoinSemanticsTests: XCTestCase {
         // and removal decision now happen under the job's lock, so concurrent
         // joins can't lose-update the count or double-remove. Stress the path.
         for _ in 0..<50 {
-            let runtime = Runtime.shared
+            let runtime = Coltrane.shared
             runtime.initialize(maxVPs: 4)
             var opts = JobOptions()
             opts.maxJoins = 2
@@ -91,7 +91,7 @@ final class JoinSemanticsTests: XCTestCase {
         // Many coarse tasks across several VPs exercise the path where a joined
         // job is assigned-to-another-VP / executing: join must help + wait, not
         // deadlock, and still return the correct aggregate.
-        let runtime = Runtime.shared
+        let runtime = Coltrane.shared
         runtime.initialize(maxVPs: 8)
         let h = runtime.spawn { sumTree(14) }
         XCTAssertEqual(h.join(), 1 << 14)

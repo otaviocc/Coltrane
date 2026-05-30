@@ -86,7 +86,7 @@ final class DAGTests: XCTestCase {
     }
 
     func testSpawnAttachesChildToCurrentJob() throws {
-        let runtime = Runtime.shared
+        let runtime = Coltrane.shared
         runtime.initialize(maxVPs: 1) // single VP: everything runs inline on main
         runtime.removeJobsEnabled = false
 

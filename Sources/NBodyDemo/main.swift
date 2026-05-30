@@ -303,7 +303,7 @@ func forcesSequential(_ bodies: [Body], _ cells: [BHCell]) -> [Vec2] {
 func forcesColtrane(_ bodies: [Body], _ cells: [BHCell], chunks: Int) -> [Vec2] {
     let ranges = chunkRanges(bodies.count, count: chunks)
     let handles = ranges.map { range in
-        Runtime.shared.spawn { forcesForRange(range, bodies, cells) }
+        Coltrane.shared.spawn { forcesForRange(range, bodies, cells) }
     }
     var acc = [Vec2]()
     acc.reserveCapacity(bodies.count)
@@ -434,8 +434,8 @@ let seqMs = elapsedMilliseconds(since: seqStart)
 print(String(format: "sequential       checksum=%016llx  (%.1f ms)", checksum(seq), seqMs))
 
 // 2. Coltrane spawn/join
-Runtime.shared.initialize(maxVPs: maxVPs)
-Runtime.shared.helpingStrategy = .anywhere // flat fan-out: help with any pending chunk
+Coltrane.shared.initialize(maxVPs: maxVPs)
+Coltrane.shared.helpingStrategy = .anywhere // flat fan-out: help with any pending chunk
 let coltraneStart = Date()
 let coltrane = forcesColtrane(bodies, cells, chunks: chunks)
 let coltraneMs = elapsedMilliseconds(since: coltraneStart)
@@ -471,7 +471,7 @@ if steps > 0 {
     }
 }
 
-Runtime.shared.terminate()
+Coltrane.shared.terminate()
 
 let grid = density(bodies, resolution: 600, view: diskRadius * 1.3)
 print("")

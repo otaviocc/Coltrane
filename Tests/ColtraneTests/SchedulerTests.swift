@@ -28,7 +28,7 @@ import XCTest
 final class SchedulerTests: XCTestCase {
 
     func testSearchClaimsNewestUnassignedFirst() {
-        let runtime = Runtime.shared
+        let runtime = Coltrane.shared
         runtime.initialize(maxVPs: 1)
 
         let list = JobList()
@@ -54,7 +54,7 @@ final class SchedulerTests: XCTestCase {
     }
 
     func testSearchRecursesIntoChildren() {
-        let runtime = Runtime.shared
+        let runtime = Coltrane.shared
         runtime.initialize(maxVPs: 1)
 
         let list = JobList()
@@ -71,7 +71,7 @@ final class SchedulerTests: XCTestCase {
     }
 
     func testMatchById() {
-        let runtime = Runtime.shared
+        let runtime = Coltrane.shared
         runtime.initialize(maxVPs: 1)
 
         let list = JobList()
@@ -88,7 +88,7 @@ final class SchedulerTests: XCTestCase {
     }
 
     func testClaimAssignsUnassignedJobOnce() {
-        let runtime = Runtime.shared
+        let runtime = Coltrane.shared
         runtime.initialize(maxVPs: 1)
         let vp = VirtualProcessor(id: 7, isMain: false, runtime: runtime)
         let job = Job<Int>(id: 1, options: .init()) { 0 }
@@ -102,7 +102,7 @@ final class SchedulerTests: XCTestCase {
     }
 
     func testClaimRespectsSpecificAffinity() {
-        let runtime = Runtime.shared
+        let runtime = Coltrane.shared
         runtime.initialize(maxVPs: 1)
         var opts = JobOptions()
         opts.affinity = .specific(2)
@@ -122,7 +122,7 @@ final class SchedulerTests: XCTestCase {
     func testSpecificAffinityJobRunsAndJoins() {
         // End-to-end: a job pinned to a valid VP id is routed there, runs, and
         // joins to the right result.
-        let runtime = Runtime.shared
+        let runtime = Coltrane.shared
         runtime.initialize(maxVPs: 4) // VP ids 0...3
         var opts = JobOptions()
         opts.affinity = .specific(2)
@@ -133,8 +133,8 @@ final class SchedulerTests: XCTestCase {
 
     func testEachHelpingStrategyProducesCorrectResult() {
         // Result must be independent of the search policy.
-        for strategy in [Runtime.HelpingStrategy.anywhere, .currentSubtree, .joinedSubtree] {
-            let runtime = Runtime.shared
+        for strategy in [Coltrane.HelpingStrategy.anywhere, .currentSubtree, .joinedSubtree] {
+            let runtime = Coltrane.shared
             runtime.initialize(maxVPs: 4)
             runtime.helpingStrategy = strategy
             let h = runtime.spawn { sumTree(12) }
@@ -147,7 +147,7 @@ final class SchedulerTests: XCTestCase {
 /// A coarse fan-out workload: returns 2^depth by spawning two halves.
 func sumTree(_ depth: Int) -> Int {
     if depth == 0 { return 1 }
-    let a = Runtime.shared.spawn { sumTree(depth - 1) }
-    let b = Runtime.shared.spawn { sumTree(depth - 1) }
+    let a = Coltrane.shared.spawn { sumTree(depth - 1) }
+    let b = Coltrane.shared.spawn { sumTree(depth - 1) }
     return a.join() + b.join()
 }

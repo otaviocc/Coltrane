@@ -25,7 +25,7 @@ import Foundation
 // swiftlint:disable identifier_name
 
 /// Synchronization: the work-helping join and the passive fetch.
-extension Runtime {
+extension Coltrane {
 
     // MARK: - Public
 
@@ -91,7 +91,7 @@ extension Runtime {
     private func waitBriefly(for job: AnyJob) {
         job.completion.lock()
         if !job.isFinishedLocked {
-            job.completion.wait(until: Date().addingTimeInterval(Runtime.idlePollInterval))
+            job.completion.wait(until: Date().addingTimeInterval(Coltrane.idlePollInterval))
         }
         job.completion.unlock()
     }

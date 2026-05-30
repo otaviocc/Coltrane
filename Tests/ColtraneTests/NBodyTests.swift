@@ -113,7 +113,7 @@ final class NBodyTests: XCTestCase {
 
         let sequential = (0..<n).map { accel($0, pts[$0].0, pts[$0].1, root) }
 
-        let runtime = Runtime.shared
+        let runtime = Coltrane.shared
         runtime.initialize(maxVPs: 4)
         runtime.helpingStrategy = .anywhere
         let chunkSize = 37

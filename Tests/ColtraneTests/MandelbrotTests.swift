@@ -57,8 +57,8 @@ final class MandelbrotTests: XCTestCase {
         let width = 64, height = 64, maxIter = 200
         let reference = sequentialImage(width: width, height: height, maxIter: maxIter)
 
-        for strategy in [Runtime.HelpingStrategy.anywhere, .joinedSubtree, .currentSubtree] {
-            let runtime = Runtime.shared
+        for strategy in [Coltrane.HelpingStrategy.anywhere, .joinedSubtree, .currentSubtree] {
+            let runtime = Coltrane.shared
             runtime.initialize(maxVPs: 4)
             runtime.helpingStrategy = strategy
 

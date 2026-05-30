@@ -94,7 +94,7 @@ func mandelbrotColtrane(width: Int, height: Int, maxIter: Int) -> [UInt16] {
     var handles: [JobHandle<[UInt16]>] = []
     handles.reserveCapacity(height)
     for row in 0..<height {
-        handles.append(Runtime.shared.spawn {
+        handles.append(Coltrane.shared.spawn {
             mandelbrotRow(row, width: width, height: height, maxIter: maxIter)
         })
     }
@@ -195,12 +195,12 @@ let seqMs = elapsedMilliseconds(since: seqStart)
 print(String(format: "sequential       checksum=%llu  (%.1f ms)", checksum(sequential), seqMs))
 
 // 2. Coltrane spawn/join
-Runtime.shared.initialize(maxVPs: maxVPs)
-Runtime.shared.helpingStrategy = .anywhere // flat fan-out: help with any pending row
+Coltrane.shared.initialize(maxVPs: maxVPs)
+Coltrane.shared.helpingStrategy = .anywhere // flat fan-out: help with any pending row
 let coltraneStart = Date()
 let coltrane = mandelbrotColtrane(width: width, height: height, maxIter: maxIter)
 let coltraneMs = elapsedMilliseconds(since: coltraneStart)
-Runtime.shared.terminate()
+Coltrane.shared.terminate()
 print(String(
     format: "coltrane (%d VP)  checksum=%llu  (%.1f ms, %.2fx)",
     maxVPs,
