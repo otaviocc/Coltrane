@@ -60,9 +60,9 @@ func fibonacciColtrane(_ n: Int) -> Int {
     guard n > 1 else { return n }
     if n <= cutoff { return fibonacciSequential(n) }
 
-    let a = Coltrane.shared.spawn { fibonacciColtrane(n - 1) } // athread_create
+    let a = Coltrane.shared.spawn { fibonacciColtrane(n - 1) }
     let b = Coltrane.shared.spawn { fibonacciColtrane(n - 2) }
-    return a.join() + b.join() // athread_join × 2
+    return a.join() + b.join()
 }
 
 // MARK: 3. Swift async/await

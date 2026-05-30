@@ -28,8 +28,8 @@
 //
 // Unlike Fibonacci (recursive fork/join), this is a *flat data-parallel*
 // workload: every row is independent, equal-ish coarse work. That makes it a
-// good fit for the `.root` helping policy — a joining VP can pick up any pending
-// row, not just descendants of the row it happens to be waiting on.
+// good fit for the `.anywhere` helping policy — a joining VP can pick up any
+// pending row, not just descendants of the row it happens to be waiting on.
 //
 // All three produce the identical image (verified by checksum). The Coltrane
 // result is written to a PGM file and previewed as ASCII.

@@ -49,9 +49,9 @@
 // retain/release traffic on shared objects.
 //
 // It renders two views: a top-down xy projection and a tilted, depth-shaded 3D
-// view. Pass --save to write one PGM frame per time step of each view into
-// ./output/top and ./output/tilted as zero-padded sequences (frame_00000.pgm,
-// frame_00001.pgm, …). Combine a sequence into an animation afterwards, e.g.:
+// view. Pass --save to write a PGM frame of each view (every step, or every Kth
+// with --stride=K) into ./output/top and ./output/tilted as zero-padded
+// sequences (frame_00000.pgm, frame_00001.pgm, …). Assemble one afterwards, e.g.:
 //
 //   mp4:  ffmpeg -framerate 30 -i output/tilted/frame_%05d.pgm -pix_fmt yuv420p nbody3d_tilted.mp4
 //   gif:  ffmpeg -framerate 30 -i output/tilted/frame_%05d.pgm nbody3d_tilted.gif
@@ -98,8 +98,8 @@ let spinFraction = 0.4 // each cluster's internal rotation, as a fraction of cir
 let dispersionFraction = 0.4 // random velocity spread, as a fraction of the edge circular speed
 
 // Tilted-camera view: the world is rotated about the vertical axis (azimuth)
-// then tipped toward the camera (elevation) before projecting, so the spherical
-// structure reads as 3D rather than as a flat disk.
+// then tipped toward the camera (elevation) before projecting, so the structure
+// reads as 3D rather than as a flat disk.
 let cameraAzimuth = 0.6 // radians
 let cameraElevation = 0.5 // radians
 
@@ -452,8 +452,8 @@ func density(_ bodies: [Body], resolution: Int, view: Double) -> [Double] {
 }
 
 /// Projects through the tilted camera and bins into a density grid, weighting
-/// each body by how near it is to the camera so the front of the sphere reads
-/// brighter than the back — a depth cue that makes the 3D structure legible.
+/// each body by how near it is to the camera so the near side reads brighter
+/// than the far side — a depth cue that makes the 3D structure legible.
 func densityTilted(_ bodies: [Body], resolution: Int, view: Double) -> [Double] {
     var grid = [Double](repeating: 0, count: resolution * resolution)
     let scale = Double(resolution) / (2 * view)
@@ -574,8 +574,8 @@ let maxVPs = positional.count > 1 ? (Int(positional[1]) ?? 8) : 8
 let steps = positional.count > 2 ? (Int(positional[2]) ?? 15) : 15
 let chunks = maxVPs * 8
 let frameResolution = 600
-// Wide enough to frame both spheres (centers ±separation/2, radius diskRadius)
-// with margin as they fall together.
+// Wide enough to frame both clusters (centers ±separation/2, radius diskRadius)
+// with margin through the encounter and merger.
 let frameView = sphereSeparation / 2 + diskRadius * 5
 let outputDir = "output"
 let topDir = "\(outputDir)/top"
@@ -625,9 +625,10 @@ precondition(
     "all three force evaluations must be bit-identical"
 )
 
-/// Simulate (using the Coltrane force evaluation) and, if --save, snapshot each
-/// step to ./output as a PGM sequence.
 var savedFrames = 0
+
+// Simulate (using the Coltrane force evaluation) and, if --save, snapshot every
+// frameStride-th step to ./output as a PGM sequence.
 if steps > 0 {
     let saveNote = save ? ", saving every \(frameStride) step\(frameStride == 1 ? "" : "s") to \(outputDir)/" : ""
     print("\nsimulating \(steps) steps\(saveNote)…")
