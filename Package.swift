@@ -8,7 +8,8 @@ let package = Package(
         .library(name: "Coltrane", targets: ["Coltrane"]),
         .executable(name: "FiboDemo", targets: ["FiboDemo"]),
         .executable(name: "MandelbrotDemo", targets: ["MandelbrotDemo"]),
-        .executable(name: "NBodyDemo", targets: ["NBodyDemo"])
+        .executable(name: "NBodyDemo", targets: ["NBodyDemo"]),
+        .executable(name: "NBody3DDemo", targets: ["NBody3DDemo"])
     ],
     targets: [
         .target(name: "Coltrane"),
@@ -22,6 +23,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "NBodyDemo",
+            dependencies: ["Coltrane"]
+        ),
+        .executableTarget(
+            name: "NBody3DDemo",
             dependencies: ["Coltrane"]
         ),
         .testTarget(

@@ -133,3 +133,35 @@ swift run -c release NBodyDemo 100000 12 30
 ```
 
 Gravitational N-body with a Barnes–Hut quadtree: a sequential tree build, then a lock-free per-body force evaluation (chunked, `.anywhere` policy) that is bit-identical across all three methods. The tree is a flat array of value-type cells traversed via `UnsafeBufferPointer` (not a graph of class nodes, which would cap scaling with ARC traffic on shared objects). Writes an `nbody.pgm` density image. Arguments: `[bodies] [maxVPs] [steps]`. Scales roughly 7x on 8 VPs.
+
+### NBody3DDemo
+
+```sh
+swift run -c release NBody3DDemo
+swift run -c release NBody3DDemo 100000 12 30
+swift run -c release NBody3DDemo 100000 12 8000 --save --stride=8
+```
+
+The 3D sibling of NBodyDemo: the same chunked, lock-free, bit-identical force evaluation, but over an **octree** (eight children per cell) instead of a quadtree, with bodies carrying a `z` position and velocity. The scene is a galaxy-style collision: two filled, rotating star clusters on a grazing trajectory (offset by an impact parameter, internal spins aligned with the orbit) merge into a rotating, flattened remnant with tidal tails. Cluster mass is fixed independent of particle count, so `[bodies]` controls only resolution/smoothness, not the dynamics. Same parallel structure and `.anywhere` policy. Arguments: `[bodies] [maxVPs] [steps] [--save] [--stride=K]`. The scene constants (`clusterMass`, `impactParameter`, `approachSpeed`, `spinFraction`, `dispersionFraction`, softening, `dt`) are at the top of `main.swift`.
+
+It renders two views: a top-down `nbody3d.pgm` (xy projection) and a tilted-camera `nbody3d_tilted.pgm` that depth-shades each body by its distance to the camera, so the structure reads as 3D rather than as a flat disk.
+
+Pass `--save` to write one PGM frame into `./output/top` and `./output/tilted` as zero-padded sequences (`frame_00000.pgm`, `frame_00001.pgm`, …); `--stride=K` saves every Kth step (handy for long runs). Either view can then be turned into an animation:
+
+```sh
+ffmpeg -framerate 30 -i output/tilted/frame_%05d.pgm -pix_fmt yuv420p nbody3d_tilted.mp4   # mp4
+ffmpeg -framerate 30 -i output/tilted/frame_%05d.pgm nbody3d_tilted.gif                    # gif
+```
+
+## Benchmarks
+
+Measured on a MacBook Pro (Apple M4 Pro, 12 cores, 48 GB), release build, best of 5 runs, in milliseconds. The **1–12 VP** columns are Coltrane on that many Virtual Processors. The N-body rows time the parallel force evaluation only (the sequential tree build is shared by all three and excluded).
+
+| Workload | Sequential | async/await | 1 VP | 2 VP | 4 VP | 6 VP | 8 VP | 10 VP | 12 VP |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| Fibonacci, fib(40), cutoff 25 | 199.7 | 23.9 | 218.1 | 103.9 | 57.3 | 39.5 | 32.5 | 29.6 | **27.8** |
+| Mandelbrot, 1200×1200, 1000 iter | 468.4 | 53.8 | 469.2 | 243.7 | 137.9 | 95.5 | 75.7 | 68.6 | **64.2** |
+| N-body 2D, 100k bodies | 155.9 | 18.1 | 156.7 | 79.6 | 40.8 | 28.3 | 21.9 | 20.1 | **18.6** |
+| N-body 3D, 100k bodies | 639.8 | 69.9 | 639.4 | 332.3 | 169.4 | 112.8 | 85.3 | 79.2 | **71.6** |
+
+At 1 VP Coltrane matches the sequential baseline (work runs inline on the calling thread); by 12 VPs it scales roughly 7–9x and lands close to Swift's `async`/`await`.
