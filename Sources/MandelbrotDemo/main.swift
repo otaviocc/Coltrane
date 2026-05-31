@@ -55,7 +55,10 @@ func escapeIterations(cRe: Double, cIm: Double, maxIter: Int) -> Int {
     while iter < maxIter {
         let zRe2 = zRe * zRe
         let zIm2 = zIm * zIm
+        // |z|² > 4 ⇔ |z| > 2, the escape radius: once outside, the orbit diverges.
+        // Comparing squares avoids a square root.
         if zRe2 + zIm2 > 4.0 { break }
+        // z ← z² + c, written out for the complex square (zRe² − zIm², 2·zRe·zIm).
         zIm = 2 * zRe * zIm + cIm
         zRe = zRe2 - zIm2 + cRe
         iter += 1
@@ -136,8 +139,10 @@ func writePGM(_ image: [UInt16], width: Int, height: Int, maxIter: Int, to path:
     for i in 0..<image.count {
         let it = Int(image[i])
         if it >= maxIter {
-            bytes[i] = 0
+            bytes[i] = 0 // never escaped → inside the set → black
         } else {
+            // Normalised escape time, gamma-curved (exponent < 1 brightens the
+            // low end) so the fast-escaping filaments near the boundary stay visible.
             let t = Double(it) / Double(maxIter)
             bytes[i] = UInt8(max(0, min(255, 255 * pow(t, 0.35))))
         }

@@ -96,6 +96,9 @@ func mergeSortAsync(_ a: [Int]) async -> [Int] {
 
 // MARK: Driver
 
+/// SplitMix64 finalizer: hash the index into well-mixed bits to fill the input
+/// with reproducible pseudo-random values. 0x9E37…C15 is the golden-ratio odd
+/// increment; the two multipliers plus the 30/27/31 xor-shifts are its mix.
 func splitmix64(_ x: UInt64) -> UInt64 {
     var z = x &+ 0x9E37_79B9_7F4A_7C15
     z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
@@ -117,7 +120,8 @@ let maxVPs = CommandLine.arguments.count > 2 ? (Int(CommandLine.arguments[2]) ??
 if CommandLine.arguments.count > 3, let c = Int(CommandLine.arguments[3]) { cutoff = c }
 print("n=\(n)  maxVPs=\(maxVPs)  cutoff=\(cutoff)")
 
-// Deterministic input (same array for every approach).
+// Deterministic input (same array for every approach). `truncatingIfNeeded`
+// reinterprets the 64 random bits as an Int without overflow trapping.
 let input = (0..<n).map { Int(truncatingIfNeeded: splitmix64(UInt64($0))) }
 let reference = input.sorted()
 

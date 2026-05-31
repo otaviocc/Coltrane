@@ -80,11 +80,11 @@ struct Body {
 }
 
 // Simulation constants.
-let G = 1.0
-let theta = 0.5
-let theta2 = theta * theta
+let G = 1.0 // gravitational constant (units chosen so it's 1)
+let theta = 0.5 // Barnes–Hut opening angle: smaller = more accurate, slower
+let theta2 = theta * theta // θ² so the opening test compares squares (no sqrt)
 let softening2 = 0.04 * 0.04 // ε ≈ 0.04: collisionless/smooth, suppresses two-body graininess
-let dt = 1.0 / 256.0
+let dt = 1.0 / 256.0 // integration time step
 let diskRadius = 1.0 // radius of each cluster
 
 // Two clusters collide on a grazing trajectory and merge into a rotating remnant.
@@ -259,6 +259,8 @@ final class TreeBuilder {
     private func ensureChild(_ idx: Int, _ q: Int) -> Int {
         let existing = cells[idx].child(q)
         if existing != -1 { return Int(existing) }
+        // Octant index `q` encodes one bit per axis (bit 0 = x, 1 = y, 2 = z);
+        // a set bit offsets the child centre by +half, a clear bit by −half.
         let h = cells[idx].half / 2
         var c = BHCell()
         c.cx = cells[idx].cx + (q & 1 == 1 ? h : -h)

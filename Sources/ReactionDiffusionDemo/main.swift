@@ -50,6 +50,10 @@ import Foundation
 // swiftlint:disable identifier_name
 
 // Gray–Scott parameters (a classic "coral / worms" regime), unit grid, dt = 1.
+// Two chemicals U and V react (U + 2V → 3V); `diffU`/`diffV` are their diffusion
+// rates, `feed` replenishes U, and `feed + kill` removes V. These particular
+// values sit in the regime that grows labyrinthine, coral-like patterns; nudging
+// `feed`/`kill` yields spots, stripes, or mitosis instead.
 let diffU = 0.16
 let diffV = 0.08
 let feed = 0.055
@@ -111,6 +115,8 @@ final class Grid: @unchecked Sendable {
         let w = width, h = height
         let u = uCur, v = vCur, un = uNext, vn = vNext
         for y in r0..<r1 {
+            // Neighbour row offsets, wrapping around the edges (torus topology);
+            // the `+ h`/`+ w` before `%` keeps the index non-negative.
             let up = ((y - 1 + h) % h) * w
             let dn = ((y + 1) % h) * w
             let row = y * w
@@ -118,8 +124,11 @@ final class Grid: @unchecked Sendable {
                 let xL = (x - 1 + w) % w
                 let xR = (x + 1) % w
                 let cu = u[row + x], cv = v[row + x]
+                // Discrete Laplacian: 4-neighbour sum minus 4× the centre.
                 let lapU = u[up + x] + u[dn + x] + u[row + xL] + u[row + xR] - 4 * cu
                 let lapV = v[up + x] + v[dn + x] + v[row + xL] + v[row + xR] - 4 * cv
+                // Gray–Scott update: diffusion ± the U+2V→3V reaction, with feed of
+                // U and removal of V, stepped forward by `dt` (explicit Euler).
                 let reaction = cu * cv * cv
                 un[row + x] = cu + (diffU * lapU - reaction + feed * (1 - cu)) * dt
                 vn[row + x] = cv + (diffV * lapV + reaction - (feed + kill) * cv) * dt
@@ -183,6 +192,9 @@ func runAsync(_ grid: Grid, steps: Int, bands: [(Int, Int)]) async {
 
 // MARK: Output
 
+/// FNV-1a 64-bit hash over the field's raw bit patterns — a cheap fingerprint to
+/// assert the three runs are identical. The constants are the standard FNV offset
+/// basis and prime.
 func checksum(_ a: [Double]) -> UInt64 {
     var h: UInt64 = 1_469_598_103_934_665_603
     for x in a {

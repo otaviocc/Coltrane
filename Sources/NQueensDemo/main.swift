@@ -48,12 +48,19 @@ nonisolated(unsafe) var cutoffDepth = 3
 /// `ld`/`rd` are the diagonal-attack masks (shifted each row), `col` the used
 /// columns. A solution is counted when every column is filled.
 func queensSequential(_ ld: Int, _ col: Int, _ rd: Int) -> Int {
+    // `col` has a 1 bit per filled column; when all n are set the board is full.
     if col == mask { return 1 }
     var count = 0
+    // Columns where a queen may go this row: not attacked by a column (`col`) or
+    // either diagonal (`ld`/`rd`), restricted to the n-bit board by `& mask`.
     var free = ~(ld | col | rd) & mask
     while free != 0 {
+        // `x & -x` isolates the lowest set bit — the next candidate column —
+        // and `free -= bit` clears it so the loop visits each candidate once.
         let bit = free & -free
         free -= bit
+        // Descending one row, the diagonals shift by one column: the "/" diagonal
+        // mask shifts left, the "\" mask shifts right.
         count += queensSequential((ld | bit) << 1, col | bit, (rd | bit) >> 1)
     }
     return count
@@ -110,7 +117,7 @@ func report(_ label: String, _ count: Int, since start: Date) {
 let n = CommandLine.arguments.count > 1 ? (Int(CommandLine.arguments[1]) ?? 15) : 15
 let maxVPs = CommandLine.arguments.count > 2 ? (Int(CommandLine.arguments[2]) ?? 8) : 8
 if CommandLine.arguments.count > 3, let c = Int(CommandLine.arguments[3]) { cutoffDepth = c }
-mask = (1 << n) - 1
+mask = (1 << n) - 1 // n low bits set: one bit per column of the n×n board
 print("n=\(n)  maxVPs=\(maxVPs)  cutoffDepth=\(cutoffDepth)")
 
 // 1. Plain recursion

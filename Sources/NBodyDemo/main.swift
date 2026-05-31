@@ -68,11 +68,11 @@ struct Body {
 }
 
 // Simulation constants.
-let G = 1.0
-let theta = 0.5
-let theta2 = theta * theta
-let softening2 = 0.0025 * 0.0025
-let dt = 1.0 / 512.0
+let G = 1.0 // gravitational constant (units chosen so it's 1)
+let theta = 0.5 // Barnes–Hut opening angle: smaller = more accurate, slower
+let theta2 = theta * theta // θ² so the opening test can compare squares (no sqrt)
+let softening2 = 0.0025 * 0.0025 // ε²: floors the distance so near-collisions don't blow up the force
+let dt = 1.0 / 512.0 // integration time step
 let diskRadius = 1.0
 
 // MARK: Deterministic RNG (so all runs share identical initial conditions)
@@ -93,13 +93,17 @@ func makeBodies(_ n: Int) -> [Body] {
     var bodies = [Body]()
     bodies.reserveCapacity(n)
 
+    // A heavy central body (half the total mass) anchors the disk at the origin.
     let centralMass = Double(n) * 0.5
     bodies.append(Body(x: 0, y: 0, vx: 0, vy: 0, mass: centralMass))
 
     for _ in 1..<n {
+        // Random radius in [0.05, 1]·R and angle, placing the body on the disk.
         let r = diskRadius * (0.05 + 0.95 * rng.next())
         let a = 2 * Double.pi * rng.next()
         let x = r * cos(a), y = r * sin(a)
+        // Circular-orbit speed √(GM/r), directed tangentially (perpendicular to the
+        // radius, hence (−sin, cos)), so the disk rotates rather than collapses.
         let speed = (G * centralMass / r).squareRoot()
         bodies.append(Body(x: x, y: y, vx: -sin(a) * speed, vy: cos(a) * speed, mass: 1.0))
     }
@@ -159,6 +163,7 @@ final class TreeBuilder {
         cells.reserveCapacity(bodies.count * 2)
     }
 
+    /// Quadrant index: one bit per axis (bit 0 = x east of centre, bit 1 = y north).
     private func quadrant(_ idx: Int, _ x: Double, _ y: Double) -> Int {
         (x >= cells[idx].cx ? 1 : 0) | (y >= cells[idx].cy ? 2 : 0)
     }
@@ -220,8 +225,11 @@ func buildCells(_ bodies: [Body]) -> [BHCell] {
 
 @inline(__always)
 func pointAcceleration(_ dx: Double, _ dy: Double, _ d2: Double, _ mass: Double) -> Vec2 {
+    // Newtonian acceleration toward a point mass: a = G·m·r̂ / d². Folding the
+    // r̂ = (dx, dy)/d normalisation in gives the G·m/d³ factor below. The
+    // softening (d² + ε²) keeps d³ from collapsing toward zero at tiny distances.
     let soft = d2 + softening2
-    let inv = G * mass / (soft * soft.squareRoot()) // G·m / d³
+    let inv = G * mass / (soft * soft.squareRoot()) // = G·m / (d² + ε²)^(3/2)
     return Vec2(x: dx * inv, y: dy * inv)
 }
 

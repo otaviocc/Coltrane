@@ -41,6 +41,9 @@ import Foundation
 
 // swiftlint:disable identifier_name
 
+/// SplitMix64 finalizer: hash the index into well-mixed bits, used to seed a
+/// reproducible random board. 0x9E37…C15 is the golden-ratio odd increment; the
+/// two multipliers plus the 30/27/31 xor-shifts are its avalanche mix.
 func splitmix64(_ x: UInt64) -> UInt64 {
     var z = x &+ 0x9E37_79B9_7F4A_7C15
     z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
@@ -71,7 +74,9 @@ final class Board: @unchecked Sendable {
         next.deallocate()
     }
 
-    /// Deterministic random soup at the given live-cell density.
+    /// Deterministic random soup at the given live-cell density. Per cell, the top
+    /// 53 hashed bits become a Double in [0, 1) (÷ 2^53) and the cell is born if it
+    /// falls under `density`.
     func seed(density: Double) {
         for i in 0..<count {
             let r = Double(splitmix64(UInt64(i)) >> 11) * (1.0 / 9_007_199_254_740_992.0)
@@ -95,9 +100,12 @@ final class Board: @unchecked Sendable {
             for x in 0..<w {
                 let xL = (x - 1 + w) % w
                 let xR = (x + 1) % w
+                // Count the eight neighbours (toroidal wrap via the modulo offsets).
                 let neighbours = c[up + xL] + c[up + x] + c[up + xR]
                     + c[row + xL] + c[row + xR]
                     + c[dn + xL] + c[dn + x] + c[dn + xR]
+                // Conway's rule B3/S23: a cell is alive next generation if it has
+                // exactly 3 live neighbours (birth) or is alive with 2 (survival).
                 nx[row + x] = (neighbours == 3 || (c[row + x] == 1 && neighbours == 2)) ? 1 : 0
             }
         }
@@ -159,6 +167,8 @@ func runAsync(_ board: Board, steps: Int, bands: [(Int, Int)]) async {
 
 // MARK: Output
 
+/// FNV-1a 64-bit hash over the cells — a cheap fingerprint to assert the three
+/// runs produce the identical board. The constants are the FNV offset basis and prime.
 func checksum(_ cells: [UInt8]) -> UInt64 {
     var h: UInt64 = 1_469_598_103_934_665_603
     for x in cells {

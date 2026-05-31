@@ -40,18 +40,25 @@ import Foundation
 
 // swiftlint:disable identifier_name
 
-// Option / market parameters.
+// Option / market parameters: spot price, strike, risk-free rate, annualised
+// volatility, and time to maturity in years.
 let spot = 100.0
 let strike = 100.0
 let rate = 0.05
 let vol = 0.20
 let maturity = 1.0
 
+// Pre-computed terms of the closed-form GBM solution S_T = S0·exp(drift + volSqrtT·Z):
+// `drift` carries the Itô correction (−½σ²), `volSqrtT` is the standard deviation
+// of log-return over the period, and `discount` = e^(−rT) brings payoffs to today.
 let drift = (rate - 0.5 * vol * vol) * maturity
 let volSqrtT = vol * maturity.squareRoot()
 let discount = exp(-rate * maturity)
 
-/// Counter-based RNG: a hash of the index, identical regardless of chunking.
+/// SplitMix64: hash the index into well-mixed bits, identical regardless of how
+/// the work is chunked. The constants are the published SplitMix64 finalizer —
+/// 0x9E37…C15 is the golden-ratio odd increment, the two multipliers plus the
+/// 30/27/31 xor-shifts are its avalanche mix.
 func splitmix64(_ x: UInt64) -> UInt64 {
     var z = x &+ 0x9E37_79B9_7F4A_7C15
     z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
@@ -59,16 +66,22 @@ func splitmix64(_ x: UInt64) -> UInt64 {
     return z ^ (z >> 31)
 }
 
+/// Take the top 53 bits → a Double in [0, 1). 2^53 = 9_007_199_254_740_992 is the
+/// largest integer a Double represents exactly, so the quotient is uniform.
 func unitHalfOpen(_ bits: UInt64) -> Double {
     Double(bits >> 11) * (1.0 / 9_007_199_254_740_992.0)
 }
 
+/// Same, but the +0.5 keeps it in the *open* interval (0, 1) so `log(u1)` below is
+/// never log(0).
 func unitOpen(_ bits: UInt64) -> Double {
     (Double(bits >> 11) + 0.5) * (1.0 / 9_007_199_254_740_992.0)
 }
 
-/// Discounted call payoff for sample `i`: a Box–Muller normal drives one step of
-/// geometric Brownian motion to maturity.
+/// Discounted call payoff for sample `i`. Two independent uniforms become a
+/// standard normal Z via the Box–Muller transform `√(−2·ln u1)·cos(2π·u2)`, which
+/// drives one exact step of geometric Brownian motion to maturity; the European
+/// call pays off `max(S_T − K, 0)`.
 func payoff(_ i: Int) -> Double {
     let u1 = unitOpen(splitmix64(UInt64(i) &* 2))
     let u2 = unitHalfOpen(splitmix64(UInt64(i) &* 2 &+ 1))
@@ -126,10 +139,13 @@ func partialsAsync(_ ranges: [Range<Int>]) async -> [Double] {
 
 // MARK: Reference
 
+/// Standard-normal CDF via the complementary error function: Φ(x) = ½·erfc(−x/√2).
 func normalCDF(_ x: Double) -> Double {
     0.5 * erfc(-x / 2.0.squareRoot())
 }
 
+// Closed-form Black–Scholes call price, for comparison with the Monte Carlo
+// estimate: C = S0·Φ(d1) − K·e^(−rT)·Φ(d2).
 func analyticCall() -> Double {
     let d1 = (log(spot / strike) + (rate + 0.5 * vol * vol) * maturity) / volSqrtT
     let d2 = d1 - volSqrtT

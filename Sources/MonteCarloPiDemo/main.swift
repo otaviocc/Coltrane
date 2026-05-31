@@ -39,8 +39,10 @@ import Foundation
 
 // swiftlint:disable identifier_name
 
-/// Counter-based RNG: a hash of the index, so sample `i` is the same regardless
-/// of how the work is split.
+/// SplitMix64: hash the index into well-mixed bits, so sample `i` is the same
+/// regardless of how the work is split. The constants are the published
+/// SplitMix64 finalizer — 0x9E37…C15 is the golden-ratio odd increment, the two
+/// multipliers plus the 30/27/31 xor-shifts are its avalanche mix.
 func splitmix64(_ x: UInt64) -> UInt64 {
     var z = x &+ 0x9E37_79B9_7F4A_7C15
     z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
@@ -48,15 +50,18 @@ func splitmix64(_ x: UInt64) -> UInt64 {
     return z ^ (z >> 31)
 }
 
-/// Map 64 random bits into a double in [0, 1).
+/// Top 53 bits → a Double in [0, 1). 2^53 = 9_007_199_254_740_992 is the largest
+/// integer a Double represents exactly, so the quotient is uniform.
 func unitDouble(_ bits: UInt64) -> Double {
     Double(bits >> 11) * (1.0 / 9_007_199_254_740_992.0)
 }
 
-/// Count, over `range`, the samples that fall inside the unit quarter disk.
+/// Count, over `range`, the samples that fall inside the unit quarter disk —
+/// points in the unit square with x² + y² < 1. The fraction inside tends to π/4.
 func insideCount(_ range: Range<Int>) -> Int {
     var hits = 0
     for i in range {
+        // Two independent draws per sample (keys 2i and 2i+1).
         let x = unitDouble(splitmix64(UInt64(i) &* 2))
         let y = unitDouble(splitmix64(UInt64(i) &* 2 &+ 1))
         if x * x + y * y < 1.0 { hits += 1 }

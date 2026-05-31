@@ -85,6 +85,7 @@ func cross(_ a: Vec3, _ b: Vec3) -> Vec3 {
     Vec3(x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x)
 }
 
+/// Reflect direction `d` about a unit normal `n`: d − 2(d·n)n.
 func reflect(_ d: Vec3, _ n: Vec3) -> Vec3 {
     d - n * (2 * dot(d, n))
 }
@@ -105,12 +106,16 @@ struct Sphere {
 
     /// Nearest positive intersection distance along `ray`, if any.
     func hit(_ ray: Ray) -> Double? {
+        // Ray–sphere quadratic with `ray.dir` unit length (so the usual `a` = 1),
+        // using the "half-b" form: b = oc·dir, c = |oc|² − r², discriminant = b² − c.
         let oc = ray.origin - center
         let b = dot(oc, ray.dir)
         let c = oc.lengthSquared - radius * radius
         let disc = b * b - c
-        if disc < 0 { return nil }
+        if disc < 0 { return nil } // no real root → the ray misses the sphere
         let s = disc.squareRoot()
+        // Closest root strictly in front; the 1e-4 floor skips the surface the ray
+        // just left, avoiding self-intersection ("acne").
         let t0 = -b - s
         if t0 > 1e-4 { return t0 }
         let t1 = -b + s
@@ -155,11 +160,15 @@ let toSun = sunDir * -1
 let ambient = 0.15
 
 func skyColor(_ dir: Vec3) -> Vec3 {
+    // Vertical gradient: remap the ray's y from [-1, 1] to [0, 1] and lerp from
+    // white at the horizon to blue overhead.
     let t = 0.5 * (dir.y + 1)
     return Vec3(x: 1, y: 1, z: 1) * (1 - t) + Vec3(x: 0.45, y: 0.65, z: 1.0) * t
 }
 
 func floorColor(_ point: Vec3) -> Vec3 {
+    // Checkerboard: parity of the integer floor of x+z flips the tile colour
+    // every unit cell.
     let tile = Int(floor(point.x)) + Int(floor(point.z))
     return tile & 1 == 0 ? Vec3(x: 0.85, y: 0.85, z: 0.85) : Vec3(x: 0.12, y: 0.12, z: 0.12)
 }
@@ -178,10 +187,15 @@ func trace(_ ray: Ray, _ depth: Int) -> Vec3 {
     let normal = (point - sphere.center).normalized
     let base = sphere.checker ? floorColor(point) : sphere.color
 
+    // Shadow ray toward the sun, its origin nudged along the normal (the 1e-4)
+    // so it doesn't immediately re-hit this surface. In shadow → no diffuse term;
+    // otherwise Lambert's cosine, max(0, n·L).
     let shadowRay = Ray(origin: point + normal * 1e-4, dir: toSun)
     let lit = spheres.contains { $0.hit(shadowRay) != nil } ? 0.0 : max(0, dot(normal, toSun))
     var color = base * (ambient + lit * (1 - ambient))
 
+    // Recurse for the mirror term, blending local and reflected colour by the
+    // sphere's reflectivity. `depth` bounds the recursion.
     if sphere.reflectivity > 0, depth > 0 {
         let reflected = trace(Ray(origin: point + normal * 1e-4, dir: reflect(ray.dir, normal)), depth - 1)
         color = color * (1 - sphere.reflectivity) + reflected * sphere.reflectivity
@@ -197,6 +211,11 @@ let samples = CommandLine.arguments.count > 3 ? (Int(CommandLine.arguments[3]) ?
 let maxDepth = 8
 let width = size, height = size
 
+// Pinhole camera. `halfHeight = tan(fov/2)` for a 45° vertical field of view sizes
+// the image plane one unit in front of the eye; `halfWidth` applies the aspect
+// ratio. (camU, camV, camW) is the orthonormal camera basis (right, up, backward),
+// and `lowerLeft`/`horizontal`/`vertical` span the image plane so a pixel's (s, t)
+// in [0,1]² maps to a point on it.
 let camOrigin = Vec3(x: 0, y: 1.6, z: 5)
 let lookAt = Vec3(x: 0, y: 0.9, z: 0)
 let aspect = Double(width) / Double(height)
@@ -211,6 +230,10 @@ let vertical = camV * (2 * halfHeight)
 
 func renderRow(_ y: Int) -> [Vec3] {
     var row = [Vec3](repeating: Vec3(x: 0, y: 0, z: 0), count: width)
+    // Anti-aliasing: shoot samples×samples rays per pixel on a regular sub-grid
+    // and average them (`norm` = 1/count). `(sub + 0.5) * inv` centres each ray
+    // in its sub-cell; `t` is flipped (1 − …) because image rows run top-down
+    // while the camera's vertical axis points up.
     let inv = 1.0 / Double(samples)
     let norm = 1.0 / Double(samples * samples)
     for x in 0..<width {
@@ -252,6 +275,9 @@ func renderAsync() async -> [Vec3] {
 
 // MARK: Output
 
+/// FNV-1a 64-bit hash over the pixels' raw bit patterns — a cheap content
+/// fingerprint to assert the three renders are identical. The two constants are
+/// the standard FNV offset basis and prime.
 func checksum(_ image: [Vec3]) -> UInt64 {
     var h: UInt64 = 1_469_598_103_934_665_603
     for c in image {
@@ -263,7 +289,9 @@ func checksum(_ image: [Vec3]) -> UInt64 {
 }
 
 func toByte(_ value: Double) -> UInt8 {
-    UInt8(max(0, min(255, (max(0, min(1, value)).squareRoot()) * 255))) // gamma 2.0
+    // Clamp to [0, 1], gamma-correct (√ ≈ gamma 2.0, brightening midtones for
+    // display), then scale to a 0–255 byte.
+    UInt8(max(0, min(255, (max(0, min(1, value)).squareRoot()) * 255)))
 }
 
 func writePPM(_ image: [Vec3], width: Int, height: Int, to path: String) {
