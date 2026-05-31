@@ -31,7 +31,7 @@ import Foundation
 /// the runtime maps that work onto real threads using work-helping. Use the
 /// shared instance via `Coltrane.shared`. `@unchecked Sendable` because all
 /// shared state is guarded by `stateLock` or by a `JobList`'s own lock.
-package final class Coltrane: @unchecked Sendable {
+public final class Coltrane: @unchecked Sendable {
 
     // MARK: - Nested types
 
@@ -42,7 +42,7 @@ package final class Coltrane: @unchecked Sendable {
     /// (`anywhere`/`currentSubtree`) can deepen that stack beyond the program's
     /// own recursion on deep fork/join — risking overflow. `joinedSubtree`
     /// bounds the extra depth to the joined subtree and is the safe default.
-    package enum HelpingStrategy {
+    public enum HelpingStrategy {
 
         /// Help with any pending job anywhere in the graph. Best for flat,
         /// data-parallel fan-out; may grow the joining thread's stack on deep
@@ -59,7 +59,7 @@ package final class Coltrane: @unchecked Sendable {
     // MARK: - Properties
 
     /// The shared runtime instance — the singleton used throughout the package.
-    package static let shared = Coltrane()
+    public static let shared = Coltrane()
 
     /// How long an idle processor parks before re-checking for work, in seconds.
     static let idlePollInterval: TimeInterval = 0.001
@@ -81,7 +81,7 @@ package final class Coltrane: @unchecked Sendable {
 
     /// Where joining processors look for work to help with. Defaults to
     /// `.joinedSubtree`.
-    package var helpingStrategy: HelpingStrategy {
+    public var helpingStrategy: HelpingStrategy {
         get { stateLock.lock()
             defer { stateLock.unlock() }
             return _helpingStrategy
@@ -110,7 +110,7 @@ package final class Coltrane: @unchecked Sendable {
     ///
     /// The calling thread becomes VP 0; the rest are started as worker threads.
     /// Defaults to one processor per active core. Call `terminate()` when done.
-    package func initialize(maxVPs: Int = ProcessInfo.processInfo.activeProcessorCount) {
+    public func initialize(maxVPs: Int = ProcessInfo.processInfo.activeProcessorCount) {
         let count = max(1, maxVPs)
 
         stateLock.lock()
@@ -137,7 +137,7 @@ package final class Coltrane: @unchecked Sendable {
     /// Returns the number of jobs that were never joined — `0` for a
     /// well-behaved program — which callers may assert on.
     @discardableResult
-    package func terminate() -> Int {
+    public func terminate() -> Int {
         stateLock.lock()
         _isRunning = false
         let workers = vpList.filter { !$0.isMain }
@@ -166,7 +166,7 @@ package final class Coltrane: @unchecked Sendable {
     /// processor reaches it first. The work runs only once the handle is joined
     /// or another processor picks it up; it does not start eagerly here.
     @discardableResult
-    package func spawn<T: Sendable>(
+    public func spawn<T: Sendable>(
         options: JobOptions = .init(),
         _ body: @escaping () -> T
     ) -> JobHandle<T> {

@@ -24,7 +24,7 @@
 ///
 /// The handle holds a strong reference to its underlying job, so `join()` and
 /// `fetch()` can always resolve it. `T` is the type the job produces.
-package struct JobHandle<T: Sendable> {
+public struct JobHandle<T: Sendable> {
 
     // MARK: - Properties
 
@@ -32,7 +32,7 @@ package struct JobHandle<T: Sendable> {
     let job: Job<T>
 
     /// Whether the job has finished producing its result.
-    package var isComplete: Bool {
+    public var isComplete: Bool {
         Coltrane.shared.isComplete(job)
     }
 
@@ -41,7 +41,7 @@ package struct JobHandle<T: Sendable> {
     /// Waits for the job to finish and returns its result, helping to run the
     /// job — or other pending work — on the calling processor in the meantime.
     @discardableResult
-    package func join() -> T {
+    public func join() -> T {
         Coltrane.shared.join(job)
         return job.storedResult
     }
@@ -49,7 +49,7 @@ package struct JobHandle<T: Sendable> {
     /// Waits for the job to finish and returns its result without contributing
     /// work, leaving the job in the graph.
     @discardableResult
-    package func fetch() -> T {
+    public func fetch() -> T {
         Coltrane.shared.fetch(job)
         return job.storedResult
     }

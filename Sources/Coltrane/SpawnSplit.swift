@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 /// Split/merge fan-out built on top of `spawn`/`join`.
-package extension Coltrane {
+public extension Coltrane {
 
     // MARK: - Public
 

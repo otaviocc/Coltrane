@@ -26,12 +26,12 @@ import Foundation
 ///
 /// Pass an instance to `Coltrane.spawn(options:_:)` to control how the job is
 /// joined and placed. The defaults match an ordinary joinable task.
-package struct JobOptions {
+public struct JobOptions {
 
     // MARK: - Nested types
 
     /// Whether a job is expected to be joined or runs fire-and-forget.
-    package enum DetachState {
+    public enum DetachState {
 
         /// The job will be joined; its result is kept until then.
         case joinable
@@ -43,22 +43,22 @@ package struct JobOptions {
     // MARK: - Properties
 
     /// Whether the job is joinable or detached. Defaults to `.joinable`.
-    package var detachState: DetachState = .joinable
+    public var detachState: DetachState = .joinable
     /// How many times the job may be joined before it is removed from the
     /// graph. Defaults to `1`.
-    package var maxJoins = 1
+    public var maxJoins = 1
     /// Which virtual processor the job must run on. Defaults to `.any`.
-    package var affinity: ProcessorAffinity = .any
+    public var affinity: ProcessorAffinity = .any
 
     // MARK: - Life cycle
 
     /// Creates options with the default values.
-    package init() {}
+    public init() {}
 }
 
 /// Pins a job to a particular virtual processor, or leaves it free to run on
 /// any of them.
-package enum ProcessorAffinity: Equatable {
+public enum ProcessorAffinity: Equatable {
 
     /// The job may be claimed and run by any virtual processor.
     case any

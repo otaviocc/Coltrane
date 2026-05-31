@@ -8,6 +8,29 @@ In other words, you focus on describing the concurrency of your application inst
 
 > This is a deliberate alternative to Swift Structured Concurrency. The core is built on raw threads and locks (`Thread`, `NSCondition`, `NSRecursiveLock`, `DispatchSemaphore`). There is no `async`/`await`, no actors, and no stack switching. Jobs run inline on a VP's real call stack.
 
+## Installation
+
+Coltrane is a Swift package (Swift 6, macOS 13+). Add it to your `Package.swift`:
+
+```swift
+let package = Package(
+    name: "MyApp",
+    dependencies: [
+        .package(url: "https://github.com/otaviocc/Coltrane.git", from: "1.1.0")
+    ],
+    targets: [
+        .target(
+            name: "MyApp",
+            dependencies: ["Coltrane"]
+        )
+    ]
+)
+```
+
+In Xcode: **File ▸ Add Package Dependencies…**, paste `https://github.com/otaviocc/Coltrane.git`, and add the `Coltrane` library product to your target.
+
+Then `import Coltrane` wherever you use it.
+
 ## Example
 
 ```swift
@@ -29,6 +52,46 @@ Coltrane.shared.terminate()
 Below the cutoff, the function recurses directly instead of spawning. A task that small costs more to schedule than to compute, so splitting only pays off for the coarser upper levels of the tree. Tune the threshold to the work per task. This is not specific to Coltrane. Every task runtime (including `async`/`await`) needs a cutoff for fine-grained recursion.
 
 The core invariant: the result is **independent of the VP count**. `fibonacci(35)` is `9227465` on 1, 2, 4, or 8 VPs.
+
+## Usage
+
+**1. Start and stop the runtime.** Call `initialize(maxVPs:)` once before spawning any work and `terminate()` when you are done. The thread that calls `initialize` becomes VP 0; the rest are spun up as worker threads. Omit `maxVPs` to size the pool to the core count. `terminate()` returns the number of jobs that were spawned but never joined — `0` for a well-behaved program, so it doubles as a leak check.
+
+```swift
+Coltrane.shared.initialize()          // one VP per core
+defer { Coltrane.shared.terminate() }
+```
+
+**2. Spawn work, join the result.** `spawn` adds a task to the graph and hands back a `JobHandle<T>`. The closure does **not** run eagerly — it runs when some VP claims it (including the VP that joins it). Call `join()` to get the result; while it waits, the joining VP helps run other pending work instead of blocking. Use `fetch()` instead when you want the result but do not want the caller to pitch in (e.g. from a thread that is not a VP).
+
+```swift
+let a = Coltrane.shared.spawn { expensive(0) }
+let b = Coltrane.shared.spawn { expensive(1) }
+let total = a.join() + b.join()       // both run in parallel, result is deterministic
+```
+
+Closures run on arbitrary VPs, so anything they capture and mutate must be safe to touch from multiple threads. The cleanest style is the functional one above: each task returns a value and the parent combines results after joining, rather than writing into shared state.
+
+**3. Add a sequential cutoff for fine-grained recursion.** Below some size, recurse directly instead of spawning — a task too small to schedule costs more than it saves (see the `n <= 20` guard in the example above). Every task runtime needs this; tune the threshold to the work per task.
+
+**4. Fan out data-parallel work with `spawnSplit`.** For flat "split a range, process the pieces, merge" workloads, `spawnSplit` does the spawning and joining for you:
+
+```swift
+let sum = Coltrane.shared.spawnSplit(
+    data: 0..<1_000_000,
+    splitFactor: 8,
+    split: { range, parts, i in chunk(range, parts, i) },  // input for piece i
+    merge: { partials in partials.reduce(0, +) }           // combine results
+) { chunk in
+    chunk.reduce(0, +)                                     // process one piece
+}.join()
+```
+
+**5. Tune options when needed.** Pass `JobOptions` to `spawn` for per-task control: `maxJoins` (how many times a job may be joined before it is removed from the graph, default `1`), `detachState` (`.joinable` vs `.detached` fire-and-forget), and `affinity` (`.any` or `.specific(vpID)` to pin a task to one VP). Set `Coltrane.shared.helpingStrategy` to match the workload shape:
+
+- `.joinedSubtree` (default) — a joining VP only helps within the joined job's subtree. Safe for deep recursive fork/join: it bounds how much helped work can grow the joining thread's call stack.
+- `.anywhere` — a joining VP can help with any pending job. Best for flat, data-parallel fan-out (Mandelbrot rows, an N-body force pass). Avoid it on deep recursive workloads, where it can deepen the stack beyond the program's own recursion.
+- `.currentSubtree` — help within the subtree of the job currently running on this VP.
 
 ## How it works
 
