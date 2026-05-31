@@ -65,9 +65,11 @@ final class VirtualProcessor: @unchecked Sendable {
     /// on the main processor (VP 0).
     func startThread() {
         precondition(!isMain, "VP 0 (main) must not spawn a thread")
+        let callerQoS = Thread.current.qualityOfService
         let t = Thread { [weak self] in self?.runLoop() }
         t.stackSize = 8 << 20
         t.name = "Coltrane.VP\(id)"
+        t.qualityOfService = callerQoS
         thread = t
         t.start()
     }

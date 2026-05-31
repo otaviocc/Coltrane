@@ -24,7 +24,7 @@
 ///
 /// The handle holds a strong reference to its underlying job, so `join()` and
 /// `fetch()` can always resolve it. `T` is the type the job produces.
-public struct JobHandle<T: Sendable> {
+public struct JobHandle<T: Sendable>: Sendable {
 
     // MARK: - Properties
 
