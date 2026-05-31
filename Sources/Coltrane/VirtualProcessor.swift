@@ -45,7 +45,6 @@ final class VirtualProcessor: @unchecked Sendable {
     /// last. Touched only by this processor's own thread.
     var jobStack: [AnyJob] = []
 
-    private let idle = NSCondition()
     private let finished = DispatchSemaphore(value: 0)
     private var thread: Thread?
     private unowned let runtime: Coltrane
@@ -90,14 +89,6 @@ final class VirtualProcessor: @unchecked Sendable {
         finished.signal()
     }
 
-    /// Wakes the processor if it is parked, so it re-checks for work or notices
-    /// that the runtime has stopped.
-    func wakeIdle() {
-        idle.lock()
-        idle.broadcast()
-        idle.unlock()
-    }
-
     /// Blocks until this processor's run loop has exited. Used during teardown.
     func waitUntilFinished() {
         finished.wait()
@@ -106,9 +97,12 @@ final class VirtualProcessor: @unchecked Sendable {
     // MARK: - Private
 
     private func idleWait() {
-        idle.lock()
-        idle.wait(until: Date().addingTimeInterval(Coltrane.idlePollInterval))
-        idle.unlock()
+        // Park until a job is spawned (`workSignal`) or the poll interval elapses,
+        // whichever comes first. The timeout is a backstop against a missed wake.
+        let cond = runtime.workSignal
+        cond.lock()
+        cond.wait(until: Date().addingTimeInterval(Coltrane.idlePollInterval))
+        cond.unlock()
     }
 
     private func bindToCore(_ logicalId: Int) {

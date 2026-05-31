@@ -68,6 +68,14 @@ public final class Coltrane: @unchecked Sendable {
     let rootList = JobList()
     /// Guards the virtual-processor set, thread map, counters, and run flag.
     let stateLock = NSLock()
+    /// Signalled once per spawned job so a parked processor wakes immediately to
+    /// claim it, instead of waiting out the `idlePollInterval`. A condition (not a
+    /// counting semaphore) so a signal with no parked waiter is harmlessly
+    /// discarded — a burst of spawns whose jobs are already claimed can't pile up
+    /// surplus wakes and make idle processors busy-spin. The poll remains a
+    /// backstop against a missed wake; this removes the per-spawn wake latency
+    /// that dominates bulk-synchronous, barrier-per-step workloads.
+    let workSignal = NSCondition()
 
     private var _helpingStrategy: HelpingStrategy = .joinedSubtree
     private var vpList: [VirtualProcessor] = []
@@ -143,9 +151,11 @@ public final class Coltrane: @unchecked Sendable {
         let workers = vpList.filter { !$0.isMain }
         stateLock.unlock()
 
-        for worker in workers {
-            worker.wakeIdle()
-        }
+        // Wake every parked worker so it observes `_isRunning == false` and exits
+        // (the idle wait also times out within `idlePollInterval` as a backstop).
+        workSignal.lock()
+        workSignal.broadcast()
+        workSignal.unlock()
         for worker in workers {
             worker.waitUntilFinished()
         }
@@ -222,6 +232,10 @@ public final class Coltrane: @unchecked Sendable {
         } else {
             rootList.append(job)
         }
+        // Wake one parked processor to claim the new work promptly. Signalled
+        // without holding the condition lock to keep the spawn path cheap under
+        // heavy fan-out; a wakeup lost to that race is caught by the idle poll.
+        workSignal.signal()
     }
 
     // MARK: - Private
