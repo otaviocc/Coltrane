@@ -10,7 +10,8 @@ let package = Package(
         .executable(name: "MandelbrotDemo", targets: ["MandelbrotDemo"]),
         .executable(name: "NBodyDemo", targets: ["NBodyDemo"]),
         .executable(name: "NBody3DDemo", targets: ["NBody3DDemo"]),
-        .executable(name: "MergeSortDemo", targets: ["MergeSortDemo"])
+        .executable(name: "MergeSortDemo", targets: ["MergeSortDemo"]),
+        .executable(name: "NQueensDemo", targets: ["NQueensDemo"])
     ],
     targets: [
         .target(name: "Coltrane"),
@@ -32,6 +33,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "MergeSortDemo",
+            dependencies: ["Coltrane"]
+        ),
+        .executableTarget(
+            name: "NQueensDemo",
             dependencies: ["Coltrane"]
         ),
         .testTarget(
