@@ -216,15 +216,85 @@ ffmpeg -framerate 30 -i output/tilted/frame_%05d.pgm -pix_fmt yuv420p nbody3d_ti
 ffmpeg -framerate 30 -i output/tilted/frame_%05d.pgm nbody3d_tilted.gif                    # gif
 ```
 
+### MergeSortDemo
+
+```sh
+swift run -c release MergeSortDemo
+swift run -c release MergeSortDemo 4000000 12 16384
+```
+
+Parallel merge sort — the one demo built on `spawnSplit`: each level splits the array in two, sorts the halves in parallel, and merges their sorted results on join. Divide-and-conquer over real data, so the inherently sequential top-level merges cap the speedup. Arguments: `[n] [maxVPs] [cutoff]`.
+
+### NQueensDemo
+
+```sh
+swift run -c release NQueensDemo
+swift run -c release NQueensDemo 16 12 3
+```
+
+Counts the solutions to the N-Queens problem by bitmask backtracking, spawning a task per branch down to a cutoff depth. Recursive fork/join like Fibonacci, but the branches prune to very different sizes — imbalanced subtrees, the case work-helping is built for. Default `joinedSubtree` policy. Arguments: `[n] [maxVPs] [cutoffDepth]` (n=15 has 2,279,184 solutions).
+
+### MonteCarloPiDemo
+
+```sh
+swift run -c release MonteCarloPiDemo
+swift run -c release MonteCarloPiDemo 200000000 12
+```
+
+Estimates π by Monte Carlo — a parallel reduction over chunked samples. Each sample's point comes from a counter-based RNG keyed by its global index, so the hit count is identical regardless of how the samples are chunked: the estimate is bit-for-bit reproducible across all three methods. `.anywhere` policy. Arguments: `[samples] [maxVPs]`.
+
+### BlackScholesDemo
+
+```sh
+swift run -c release BlackScholesDemo
+swift run -c release BlackScholesDemo 200000000 12
+```
+
+Prices a European call by Monte Carlo. Like the π demo a reduction, but over floating-point payoffs: to stay bit-identical despite floating-point non-associativity, every method forms the same per-chunk partial sums and combines them in the same order. Prints the closed-form Black–Scholes price for reference. Arguments: `[samples] [maxVPs]`.
+
+### RayTracerDemo
+
+```sh
+swift run -c release RayTracerDemo
+swift run -c release RayTracerDemo 1200 12 3
+```
+
+Renders a reflective sphere scene, one job per image row. Flat data-parallel like Mandelbrot, but per-pixel cost is very uneven — a ray that misses is cheap, one that hits the mirror sphere recurses to the reflection-depth limit — so work-helping balances the load. Anti-aliased and deterministic, so all three render the bit-identical image. Writes a colour `raytrace.ppm`. Arguments: `[size] [maxVPs] [samples]` (samples = anti-aliasing rays per axis). `.anywhere` policy.
+
+### ReactionDiffusionDemo
+
+```sh
+swift run -c release ReactionDiffusionDemo
+swift run -c release ReactionDiffusionDemo 2048 12 200
+```
+
+A Gray–Scott reaction–diffusion simulation — an iterative stencil, each step a parallel map over the grid with a barrier between steps, written in place into persistent double buffers. Deterministic and bit-identical regardless of how the rows are split. Writes a `reaction.pgm`. Unlike the other demos it is bulk-synchronous, so it is sensitive to per-barrier latency: Coltrane's lock-free spawn (idle workers re-poll on a ~1 ms interval) trails `async`/`await` unless each step is well over a millisecond, which larger grids ensure. Arguments: `[size] [maxVPs] [steps]`.
+
+### GameOfLifeDemo
+
+```sh
+swift run -c release GameOfLifeDemo
+swift run -c release GameOfLifeDemo 4096 12 300
+```
+
+Conway's Game of Life — a bulk-synchronous iterative stencil like the reaction–diffusion demo (a barrier every generation, each cell an 8-neighbour count of the previous board). Persistent double buffers, deterministic, bit-identical across methods. Writes a `life.pgm`. The cheap cells make generations short, so it needs a large board to beat sequential and trails `async`/`await`. Arguments: `[size] [maxVPs] [steps]`.
+
 ## Benchmarks
 
 Measured on a MacBook Pro (Apple M4 Pro, 12 cores, 48 GB), release build, best of 5 runs, in milliseconds. The **1–12 VP** columns are Coltrane on that many Virtual Processors. The N-body rows time the parallel force evaluation only (the sequential tree build is shared by all three and excluded).
 
 | Workload | Sequential | async/await | 1 VP | 2 VP | 4 VP | 6 VP | 8 VP | 10 VP | 12 VP |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| Fibonacci, fib(40), cutoff 25 | 199.7 | 23.9 | 218.1 | 103.9 | 57.3 | 39.5 | 32.5 | 29.6 | **27.8** |
-| Mandelbrot, 1200×1200, 1000 iter | 468.4 | 53.8 | 469.2 | 243.7 | 137.9 | 95.5 | 75.7 | 68.6 | **64.2** |
-| N-body 2D, 100k bodies | 155.9 | 18.1 | 156.7 | 79.6 | 40.8 | 28.3 | 21.9 | 20.1 | **18.6** |
-| N-body 3D, 100k bodies | 639.8 | 69.9 | 639.4 | 332.3 | 169.4 | 112.8 | 85.3 | 79.2 | **71.6** |
+| Fibonacci, fib(40), cutoff 25 | 201.5 | 23.8 | 220.4 | 108.9 | 58.8 | 40.6 | 32.4 | 30.2 | **28.4** |
+| Mandelbrot, 1200×1200, 1000 iter | 469.3 | 53.6 | 469.2 | 245.0 | 138.6 | 95.5 | 76.9 | 69.5 | **63.4** |
+| N-body 2D, 100k bodies | 155.6 | 17.9 | 157.3 | 80.6 | 40.9 | 27.4 | 21.9 | 20.2 | **18.5** |
+| N-body 3D, 100k bodies | 633.4 | 69.2 | 633.3 | 325.4 | 167.8 | 112.4 | 85.4 | 78.3 | **70.4** |
+| Merge sort, 4M Int | 234.5 | 46.5 | 234.5 | 126.7 | 84.6 | 64.9 | 57.8 | 54.2 | **51.7** |
+| N-Queens, n=15 | 747.7 | 77.1 | 754.5 | 383.1 | 198.5 | 134.4 | 103.7 | 91.7 | **80.9** |
+| Monte Carlo π, 100M samples | 368.1 | 38.7 | 369.0 | 186.7 | 95.6 | 64.3 | 50.0 | 44.7 | **40.5** |
+| Black–Scholes MC, 100M paths | 2109.6 | 224.3 | 2111.3 | 1074.0 | 542.9 | 363.0 | 273.9 | 247.1 | **223.5** |
+| Ray tracer, 1000×1000, 4 spp | 135.0 | 19.5 | 136.6 | 73.3 | 42.1 | 35.2 | **34.9** | 36.5 | 38.1 |
+| Reaction–diffusion, 1024², 1000 steps | 1652.4 | 265.2 | 1653.2 | 1542.1 | 1359.7 | 852.6 | 778.3 | 750.5 | **733.0** |
+| Game of Life, 2048², 300 gens | 3207.9 | 428.9 | 3172.2 | 1980.8 | 1198.0 | 926.8 | 788.8 | 700.2 | **656.4** |
 
-At 1 VP Coltrane matches the sequential baseline (work runs inline on the calling thread); by 12 VPs it scales roughly 7–9x and lands close to Swift's `async`/`await`.
+At 1 VP Coltrane matches the sequential baseline (work runs inline on the calling thread). Scaling then depends on the workload's shape: compute-bound recursion and reductions (N-Queens, Monte Carlo, Black–Scholes) reach roughly 9x by 12 VPs and match `async`/`await`; fine-grained data-parallel work with many tiny jobs (Mandelbrot rows, the ray tracer) and the bulk-synchronous stencils (reaction–diffusion, Game of Life) gain less, where per-task or per-barrier overhead — not the runtime's throughput — sets the ceiling. The ray tracer even regresses past 8 VPs as 1000 row-jobs contend on the shared graph.
