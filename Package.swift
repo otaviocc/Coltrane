@@ -13,7 +13,8 @@ let package = Package(
         .executable(name: "MergeSortDemo", targets: ["MergeSortDemo"]),
         .executable(name: "NQueensDemo", targets: ["NQueensDemo"]),
         .executable(name: "MonteCarloPiDemo", targets: ["MonteCarloPiDemo"]),
-        .executable(name: "ReactionDiffusionDemo", targets: ["ReactionDiffusionDemo"])
+        .executable(name: "ReactionDiffusionDemo", targets: ["ReactionDiffusionDemo"]),
+        .executable(name: "BlackScholesDemo", targets: ["BlackScholesDemo"])
     ],
     targets: [
         .target(name: "Coltrane"),
@@ -47,6 +48,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "ReactionDiffusionDemo",
+            dependencies: ["Coltrane"]
+        ),
+        .executableTarget(
+            name: "BlackScholesDemo",
             dependencies: ["Coltrane"]
         ),
         .testTarget(
