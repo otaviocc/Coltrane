@@ -285,16 +285,16 @@ Measured on a MacBook Pro (Apple M4 Pro, 12 cores, 48 GB), release build, best o
 
 | Workload | Sequential | async/await | 1 VP | 2 VP | 4 VP | 6 VP | 8 VP | 10 VP | 12 VP |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| Fibonacci, fib(40), cutoff 25 | 201.5 | 23.8 | 220.4 | 108.9 | 58.8 | 40.6 | 32.4 | 30.2 | **28.4** |
-| Mandelbrot, 1200×1200, 1000 iter | 469.3 | 53.6 | 469.2 | 245.0 | 138.6 | 95.5 | 76.9 | 69.5 | **63.4** |
-| N-body 2D, 100k bodies | 155.6 | 17.9 | 157.3 | 80.6 | 40.9 | 27.4 | 21.9 | 20.2 | **18.5** |
-| N-body 3D, 100k bodies | 633.4 | 69.2 | 633.3 | 325.4 | 167.8 | 112.4 | 85.4 | 78.3 | **70.4** |
-| Merge sort, 4M Int | 234.5 | 46.5 | 234.5 | 126.7 | 84.6 | 64.9 | 57.8 | 54.2 | **51.7** |
-| N-Queens, n=15 | 747.7 | 77.1 | 754.5 | 383.1 | 198.5 | 134.4 | 103.7 | 91.7 | **80.9** |
-| Monte Carlo π, 100M samples | 368.1 | 38.7 | 369.0 | 186.7 | 95.6 | 64.3 | 50.0 | 44.7 | **40.5** |
-| Black–Scholes MC, 100M paths | 2109.6 | 224.3 | 2111.3 | 1074.0 | 542.9 | 363.0 | 273.9 | 247.1 | **223.5** |
-| Ray tracer, 1000×1000, 4 spp | 135.0 | 19.5 | 136.6 | 73.3 | 42.1 | 35.2 | **34.9** | 36.5 | 38.1 |
-| Reaction–diffusion, 1024², 1000 steps | 1652.4 | 265.2 | 1653.2 | 1542.1 | 1359.7 | 852.6 | 778.3 | 750.5 | **733.0** |
-| Game of Life, 2048², 300 gens | 3207.9 | 428.9 | 3172.2 | 1980.8 | 1198.0 | 926.8 | 788.8 | 700.2 | **656.4** |
+| Fibonacci, fib(40), cutoff 25 | 203.8 | 23.9 | 204.0 | 108.1 | 56.3 | 39.6 | 32.4 | 28.5 | **27.5** |
+| Mandelbrot, 1200×1200, 1000 iter | 465.7 | 53.4 | 467.4 | 241.9 | 138.1 | 95.7 | 76.1 | 70.0 | **64.7** |
+| N-body 2D, 100k bodies | 154.7 | 18.0 | 156.7 | 80.0 | 41.2 | 27.4 | 20.7 | 19.9 | **18.3** |
+| N-body 3D, 100k bodies | 632.9 | 68.9 | 632.2 | 326.5 | 169.3 | 111.8 | 85.3 | 78.1 | **70.9** |
+| Merge sort, 4M Int | 234.3 | 46.5 | 234.1 | 135.1 | 88.1 | 65.5 | 58.3 | 53.6 | **50.8** |
+| N-Queens, n=15 | 714.4 | 74.5 | 715.9 | 362.4 | 193.4 | 128.5 | 99.6 | 86.6 | **78.3** |
+| Monte Carlo π, 100M samples | 367.6 | 38.6 | 367.4 | 187.9 | 95.1 | 64.5 | 49.5 | 44.3 | **40.3** |
+| Black–Scholes MC, 100M paths | 2104.4 | 222.1 | 2106.8 | 1072.9 | 546.4 | 364.5 | 274.7 | 246.6 | **223.6** |
+| Ray tracer, 1000×1000, 4 spp | 509.5 | 61.1 | 513.7 | 264.1 | 141.7 | 99.2 | 78.4 | 84.8 | **73.2** |
+| Reaction–diffusion, 1024², 1000 steps | 1647.8 | 265.2 | 1650.0 | 852.6 | 451.9 | 336.6 | **262.9** | 355.5 | 322.2 |
+| Game of Life, 2048², 300 gens | 3193.0 | 427.5 | 3171.1 | 1622.6 | 832.7 | 590.7 | **437.2** | 579.1 | 490.8 |
 
-At 1 VP Coltrane matches the sequential baseline (work runs inline on the calling thread). Scaling then depends on the workload's shape: compute-bound recursion and reductions (N-Queens, Monte Carlo, Black–Scholes) reach roughly 9x by 12 VPs and match `async`/`await`; fine-grained data-parallel work with many tiny jobs (Mandelbrot rows, the ray tracer) and the bulk-synchronous stencils (reaction–diffusion, Game of Life) gain less, where per-task or per-barrier overhead — not the runtime's throughput — sets the ceiling. The ray tracer even regresses past 8 VPs as 1000 row-jobs contend on the shared graph.
+At 1 VP Coltrane matches the sequential baseline (work runs inline on the calling thread). Scaling then depends on the workload's shape: compute-bound recursion and reductions (N-Queens, Monte Carlo, Black–Scholes) reach roughly 9x by 12 VPs and match `async`/`await`; fine-grained data-parallel work with many tiny jobs (Mandelbrot rows, the ray tracer) gains a little less, where per-task overhead — not the runtime's throughput — sets the ceiling. The bulk-synchronous stencils (reaction–diffusion, Game of Life) re-fan-out every step: a parked processor is signalled the moment new work is spawned rather than waiting out an idle poll, so they now track `async`/`await` closely (within ~1.3x). These two peak at **8 VP** rather than 12 — this M4 Pro has 8 performance + 4 efficiency cores, and because every step's barrier waits on its slowest band, spilling bands onto the slower efficiency cores at 10–12 VPs gates the step.
