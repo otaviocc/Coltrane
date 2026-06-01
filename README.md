@@ -55,14 +55,14 @@ The core invariant: the result is **independent of the VP count**. `fibonacci(35
 
 ## Usage
 
-**1. Start and stop the runtime.** Call `initialize(maxVPs:)` once before spawning any work and `terminate()` when you are done. The thread that calls `initialize` becomes VP 0; the rest are spun up as worker threads. Omit `maxVPs` to size the pool to the core count. `terminate()` returns the number of jobs that were spawned but never joined — `0` for a well-behaved program, so it doubles as a leak check.
+**1. Start and stop the runtime.** Call `initialize(maxVPs:)` once before spawning any work and `terminate()` when you are done. The thread that calls `initialize` becomes VP 0; the rest are spun up as worker threads. Omit `maxVPs` to size the pool to the core count. `terminate()` returns the number of jobs that were spawned but never joined, `0` for a well-behaved program, so it doubles as a leak check.
 
 ```swift
 Coltrane.shared.initialize()          // one VP per core
 defer { Coltrane.shared.terminate() }
 ```
 
-**2. Spawn work, join the result.** `spawn` adds a task to the graph and hands back a `JobHandle<T>`. The closure does **not** run eagerly — it runs when some VP claims it (including the VP that joins it). Call `join()` to get the result; while it waits, the joining VP helps run other pending work instead of blocking. Use `fetch()` instead when you want the result but do not want the caller to pitch in (e.g. from a thread that is not a VP).
+**2. Spawn work, join the result.** `spawn` adds a task to the graph and hands back a `JobHandle<T>`. The closure does **not** run eagerly. It runs when some VP claims it (including the VP that joins it). Call `join()` to get the result; while it waits, the joining VP helps run other pending work instead of blocking. Use `fetch()` instead when you want the result but do not want the caller to pitch in (e.g. from a thread that is not a VP).
 
 ```swift
 let a = Coltrane.shared.spawn { expensive(0) }
@@ -72,7 +72,7 @@ let total = a.join() + b.join()       // both run in parallel, result is determi
 
 Closures run on arbitrary VPs, so anything they capture and mutate must be safe to touch from multiple threads. The cleanest style is the functional one above: each task returns a value and the parent combines results after joining, rather than writing into shared state.
 
-**3. Add a sequential cutoff for fine-grained recursion.** Below some size, recurse directly instead of spawning — a task too small to schedule costs more than it saves (see the `n <= 20` guard in the example above). Every task runtime needs this; tune the threshold to the work per task.
+**3. Add a sequential cutoff for fine-grained recursion.** Below some size, recurse directly instead of spawning. A task too small to schedule costs more than it saves (see the `n <= 20` guard in the example above). Every task runtime needs this; tune the threshold to the work per task.
 
 **4. Fan out data-parallel work with `spawnSplit`.** For flat "split a range, process the pieces, merge" workloads, `spawnSplit` does the spawning and joining for you:
 
@@ -89,18 +89,18 @@ let sum = Coltrane.shared.spawnSplit(
 
 **5. Tune options when needed.** Pass `JobOptions` to `spawn` for per-task control: `maxJoins` (how many times a job may be joined before it is removed from the graph, default `1`), `detachState` (`.joinable` vs `.detached` fire-and-forget), and `affinity` (`.any` or `.specific(vpID)` to pin a task to one VP). Set `Coltrane.shared.helpingStrategy` to match the workload shape:
 
-- `.joinedSubtree` (default) — a joining VP only helps within the joined job's subtree. Safe for deep recursive fork/join: it bounds how much helped work can grow the joining thread's call stack.
-- `.anywhere` — a joining VP can help with any pending job. Best for flat, data-parallel fan-out (Mandelbrot rows, an N-body force pass). Avoid it on deep recursive workloads, where it can deepen the stack beyond the program's own recursion.
-- `.currentSubtree` — help within the subtree of the job currently running on this VP.
+- `.joinedSubtree` (default), a joining VP only helps within the joined job's subtree. Safe for deep recursive fork/join: it bounds how much helped work can grow the joining thread's call stack.
+- `.anywhere`, a joining VP can help with any pending job. Best for flat, data-parallel fan-out (Mandelbrot rows, an N-body force pass). Avoid it on deep recursive workloads, where it can deepen the stack beyond the program's own recursion.
+- `.currentSubtree`, help within the subtree of the job currently running on this VP.
 
 ## How it works
 
-The runtime holds a fixed pool of Virtual Processors (real OS threads) that share one task DAG. `spawn` adds a node to the graph; any idle VP — or a VP that is currently joining — claims a pending node and runs it, so work flows to whichever thread is free.
+The runtime holds a fixed pool of Virtual Processors (real OS threads) that share one task DAG. `spawn` adds a node to the graph; any idle VP, or a VP that is currently joining, claims a pending node and runs it, so work flows to whichever thread is free.
 
 ```mermaid
 flowchart TB
     subgraph RT["Coltrane.shared"]
-        subgraph VPs["Virtual Processors — one OS thread each"]
+        subgraph VPs["Virtual Processors, one OS thread each"]
             direction LR
             VP0["VP 0<br/>(main thread)"]
             VP1["VP 1"]
@@ -139,9 +139,9 @@ sequenceDiagram
     W->>G: claim b
     activate W
     Note over W: run b
-    M->>G: a.join() — a still unassigned
+    M->>G: a.join(), a still unassigned
     Note over M: claim a, run it inline
-    M->>G: b.join() — b is running on VP 1
+    M->>G: b.join(), b is running on VP 1
     Note over M: no other work to help → wait for b
     W-->>M: b done (signal)
     deactivate W
@@ -223,7 +223,7 @@ swift run -c release MergeSortDemo
 swift run -c release MergeSortDemo 4000000 12 16384
 ```
 
-Parallel merge sort — the one demo built on `spawnSplit`: each level splits the array in two, sorts the halves in parallel, and merges their sorted results on join. Divide-and-conquer over real data, so the inherently sequential top-level merges cap the speedup. Arguments: `[n] [maxVPs] [cutoff]`.
+Parallel merge sort, the one demo built on `spawnSplit`: each level splits the array in two, sorts the halves in parallel, and merges their sorted results on join. Divide-and-conquer over real data, so the inherently sequential top-level merges cap the speedup. Arguments: `[n] [maxVPs] [cutoff]`.
 
 ### NQueensDemo
 
@@ -232,7 +232,7 @@ swift run -c release NQueensDemo
 swift run -c release NQueensDemo 16 12 3
 ```
 
-Counts the solutions to the N-Queens problem by bitmask backtracking, spawning a task per branch down to a cutoff depth. Recursive fork/join like Fibonacci, but the branches prune to very different sizes — imbalanced subtrees, the case work-helping is built for. Default `joinedSubtree` policy. Arguments: `[n] [maxVPs] [cutoffDepth]` (n=15 has 2,279,184 solutions).
+Counts the solutions to the N-Queens problem by bitmask backtracking, spawning a task per branch down to a cutoff depth. Recursive fork/join like Fibonacci, but the branches prune to very different sizes, imbalanced subtrees, the case work-helping is built for. Default `joinedSubtree` policy. Arguments: `[n] [maxVPs] [cutoffDepth]` (n=15 has 2,279,184 solutions).
 
 ### MonteCarloPiDemo
 
@@ -241,7 +241,7 @@ swift run -c release MonteCarloPiDemo
 swift run -c release MonteCarloPiDemo 200000000 12
 ```
 
-Estimates π by Monte Carlo — a parallel reduction over chunked samples. Each sample's point comes from a counter-based RNG keyed by its global index, so the hit count is identical regardless of how the samples are chunked: the estimate is bit-for-bit reproducible across all three methods. `.anywhere` policy. Arguments: `[samples] [maxVPs]`.
+Estimates π by Monte Carlo, a parallel reduction over chunked samples. Each sample's point comes from a counter-based RNG keyed by its global index, so the hit count is identical regardless of how the samples are chunked: the estimate is bit-for-bit reproducible across all three methods. `.anywhere` policy. Arguments: `[samples] [maxVPs]`.
 
 ### BlackScholesDemo
 
@@ -259,7 +259,7 @@ swift run -c release RayTracerDemo
 swift run -c release RayTracerDemo 1200 12 3
 ```
 
-Renders a reflective sphere scene, one job per image row. Flat data-parallel like Mandelbrot, but per-pixel cost is very uneven — a ray that misses is cheap, one that hits the mirror sphere recurses to the reflection-depth limit — so work-helping balances the load. Anti-aliased and deterministic, so all three render the bit-identical image. Writes a colour `raytrace.ppm`. Arguments: `[size] [maxVPs] [samples]` (samples = anti-aliasing rays per axis). `.anywhere` policy.
+Renders a reflective sphere scene, one job per image row. Flat data-parallel like Mandelbrot, but per-pixel cost is very uneven. A ray that misses is cheap, one that hits the mirror sphere recurses to the reflection-depth limit, so work-helping balances the load. Anti-aliased and deterministic, so all three render the bit-identical image. Writes a colour `raytrace.ppm`. Arguments: `[size] [maxVPs] [samples]` (samples = anti-aliasing rays per axis). `.anywhere` policy.
 
 ### ReactionDiffusionDemo
 
@@ -268,7 +268,7 @@ swift run -c release ReactionDiffusionDemo
 swift run -c release ReactionDiffusionDemo 2048 12 200
 ```
 
-A Gray–Scott reaction–diffusion simulation — an iterative stencil, each step a parallel map over the grid with a barrier between steps, written in place into persistent double buffers. Deterministic and bit-identical regardless of how the rows are split. Writes a `reaction.pgm`. Unlike the other demos it is bulk-synchronous, so it is sensitive to per-barrier latency: Coltrane's lock-free spawn (idle workers re-poll on a ~1 ms interval) trails `async`/`await` unless each step is well over a millisecond, which larger grids ensure. Arguments: `[size] [maxVPs] [steps]`.
+A Gray–Scott reaction–diffusion simulation, an iterative stencil, each step a parallel map over the grid with a barrier between steps, written in place into persistent double buffers. Deterministic and bit-identical regardless of how the rows are split. Writes a `reaction.pgm`. Unlike the other demos it is bulk-synchronous, so it is sensitive to per-barrier latency: Coltrane's lock-free spawn (idle workers re-poll on a ~1 ms interval) trails `async`/`await` unless each step is well over a millisecond, which larger grids ensure. Arguments: `[size] [maxVPs] [steps]`.
 
 ### GameOfLifeDemo
 
@@ -277,7 +277,7 @@ swift run -c release GameOfLifeDemo
 swift run -c release GameOfLifeDemo 4096 12 300
 ```
 
-Conway's Game of Life — a bulk-synchronous iterative stencil like the reaction–diffusion demo (a barrier every generation, each cell an 8-neighbour count of the previous board). Persistent double buffers, deterministic, bit-identical across methods. Writes a `life.pgm`. The cheap cells make generations short, so it needs a large board to beat sequential and trails `async`/`await`. Arguments: `[size] [maxVPs] [steps]`.
+Conway's Game of Life, a bulk-synchronous iterative stencil like the reaction–diffusion demo (a barrier every generation, each cell an 8-neighbour count of the previous board). Persistent double buffers, deterministic, bit-identical across methods. Writes a `life.pgm`. The cheap cells make generations short, so it needs a large board to beat sequential and trails `async`/`await`. Arguments: `[size] [maxVPs] [steps]`.
 
 ## Benchmarks
 
@@ -297,4 +297,10 @@ Measured on a MacBook Pro (Apple M4 Pro, 12 cores, 48 GB), release build, best o
 | Reaction–diffusion, 1024², 1000 steps | 1647.8 | 265.2 | 1650.0 | 852.6 | 451.9 | 336.6 | **262.9** | 355.5 | 322.2 |
 | Game of Life, 2048², 300 gens | 3193.0 | 427.5 | 3171.1 | 1622.6 | 832.7 | 590.7 | **437.2** | 579.1 | 490.8 |
 
-At 1 VP Coltrane matches the sequential baseline (work runs inline on the calling thread). Scaling then depends on the workload's shape: compute-bound recursion and reductions (N-Queens, Monte Carlo, Black–Scholes) reach roughly 9x by 12 VPs and match `async`/`await`; fine-grained data-parallel work with many tiny jobs (Mandelbrot rows, the ray tracer) gains a little less, where per-task overhead — not the runtime's throughput — sets the ceiling. The bulk-synchronous stencils (reaction–diffusion, Game of Life) re-fan-out every step: a parked processor is signalled the moment new work is spawned rather than waiting out an idle poll, so they now track `async`/`await` closely (within ~1.3x). These two peak at **8 VP** rather than 12 — this M4 Pro has 8 performance + 4 efficiency cores, and because every step's barrier waits on its slowest band, spilling bands onto the slower efficiency cores at 10–12 VPs gates the step.
+At 1 VP Coltrane matches the sequential baseline (work runs inline on the calling thread). Scaling from there depends on the workload's shape.
+
+Compute-bound recursion and reductions (N-Queens, Monte Carlo, Black–Scholes) reach roughly 9x by 12 VPs and match `async`/`await`. Fine-grained data-parallel work with many tiny jobs (Mandelbrot rows, the ray tracer) gains a little less, where per-task overhead, not the runtime's throughput, sets the ceiling.
+
+The bulk-synchronous stencils (reaction–diffusion, Game of Life) re-fan-out every step. A parked processor is signalled the moment new work is spawned rather than waiting out an idle poll, so they now track `async`/`await` closely (within ~1.3x).
+
+These two peak at **8 VP** rather than 12. This M4 Pro has 8 performance and 4 efficiency cores, and because every step's barrier waits on its slowest band, spilling bands onto the slower efficiency cores at 10–12 VPs gates the step.
