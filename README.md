@@ -216,6 +216,23 @@ ffmpeg -framerate 30 -i output/tilted/frame_%05d.pgm -pix_fmt yuv420p nbody3d_ti
 ffmpeg -framerate 30 -i output/tilted/frame_%05d.pgm nbody3d_tilted.gif                    # gif
 ```
 
+### CrowdDemo
+
+```sh
+swift run -c release CrowdDemo
+swift run -c release CrowdDemo 400 12 20000 --save --stride=200
+swift run -c release CrowdDemo 20000 12 0                          # force-pass scaling benchmark only
+```
+
+Helbing's social-force model of a crowd evacuating a room through a door — the N-body problem with the sign flipped. Instead of gravity *pulling* bodies together, the social force *pushes* pedestrians apart (everyone wants personal space), so the exact same Barnes–Hut quadtree applies: a sequential tree build, then the same chunked, lock-free, bit-identical per-person force evaluation (`.anywhere` policy) over the flat `UnsafeBufferPointer` cell array. Distant clusters are lumped into a single repeller at their centre of mass; the walk bottoms out at single-person leaves, where Helbing's short-range granular terms (body compression and sliding friction) are added on top of the long-range repulsion. Those reproduce the door-clogging arch and the famous **faster-is-slower** effect — raise `--v0` and the room takes *longer* to empty. Each step also applies a driving force toward the door and repulsion from the four walls (the right wall has the door gap) and the two door jambs, then removes anyone who has made it out. Arguments: `[people] [maxVPs] [steps]`, plus `--save`, `--stride=K`, and `--v0=S` (desired speed). The default `[people]` is tuned for a watchable evacuation, so its per-step force pass is sub-millisecond and Coltrane's overhead dominates; pass a large `[people]` with `steps=0` to see the force evaluation scale (roughly 7x on 8 VPs at 5000+ people). The physical constants (`mass`, `radius`, `socialA`, `socialB`, `bodyForceK`, `frictionK`, `tau`, `dt`) are at the top of `main.swift`.
+
+It writes a colour `crowd.ppm` of the final state (people tinted by speed, blue → red) and prints an ASCII view of the room. Pass `--save` to write a PPM frame sequence into `./output` (`frame_00000.ppm`, …); `--stride=K` saves every Kth step. Assemble an animation to watch the clog form at the door:
+
+```sh
+ffmpeg -framerate 30 -i output/frame_%05d.ppm -pix_fmt yuv420p crowd.mp4   # mp4
+ffmpeg -framerate 30 -i output/frame_%05d.ppm crowd.gif                    # gif
+```
+
 ### MergeSortDemo
 
 ```sh
