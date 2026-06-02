@@ -130,7 +130,9 @@ let exitBuffer = 3.0 // m past the door the desired-direction target sits, so pe
 /// Whether `y` falls inside any door opening (a gap in the right wall).
 @inline(__always)
 func inDoorGap(_ y: Double) -> Bool {
-    for i in doorLos.indices where y > doorLos[i] && y < doorHis[i] { return true }
+    for i in doorLos.indices where y > doorLos[i] && y < doorHis[i] {
+        return true
+    }
     return false
 }
 
