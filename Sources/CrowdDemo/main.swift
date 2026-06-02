@@ -61,8 +61,12 @@
 // an ASCII preview of the room). Pass --save to write a PPM frame sequence into
 // ./output for assembly into a video.
 //
-// Usage: CrowdDemo [n] [maxVPs] [steps] [doorWidth] [--save] [--stride=K] [--v0=S]
-//        (defaults: n=400, maxVPs=8, steps=20000, doorWidth=1.2, stride=200, v0=3.0)
+// Usage: CrowdDemo [n] [maxVPs] [steps] [doorWidth] [doors] [--save] [--stride=K] [--v0=S]
+//        (defaults: n=400, maxVPs=8, steps=20000, doorWidth=1.2, doors=1, stride=200, v0=3.0)
+//
+// With doors > 1 the right wall gets that many evenly spaced openings and each
+// pedestrian heads for the one nearest their current position. doors == 1 is the
+// original single centred door, unchanged.
 
 import Coltrane
 import Foundation
@@ -91,6 +95,7 @@ let n = !positional.isEmpty ? (Int(positional[0]) ?? 400) : 400
 let maxVPs = positional.count > 1 ? (Int(positional[1]) ?? 8) : 8
 let steps = positional.count > 2 ? (Int(positional[2]) ?? 20000) : 20000
 let doorWidth = positional.count > 3 ? (Double(positional[3]) ?? 1.2) : 1.2 // meters
+let doors = positional.count > 4 ? max(1, Int(positional[4]) ?? 1) : 1 // openings in the right wall
 let chunks = maxVPs * 8
 
 // MARK: Physical constants (Helbing, Farkas & Vicsek, Nature 2000)
@@ -114,10 +119,37 @@ let placementSpacing = 1.0 // m, initial centre-to-centre spacing of the crowd g
 let roomMargin = 2.0 // m, clear space between the crowd and the walls at t=0
 let gridCols = max(1, Int(Double(n).squareRoot().rounded(.up)))
 let roomSize = Double(gridCols) * placementSpacing + 2 * roomMargin
-let doorCenter = roomSize / 2
-let doorLo = doorCenter - doorWidth / 2
-let doorHi = doorCenter + doorWidth / 2
+// Doors are evenly spaced along the right wall: door i is centred at the middle of
+// the i-th of `doors` equal segments. With doors == 1 this is exactly roomSize / 2,
+// the original single centred door, so a one-door run is unchanged.
+let doorCenters = (0..<doors).map { roomSize * (Double($0) + 0.5) / Double(doors) }
+let doorLos = doorCenters.map { $0 - doorWidth / 2 }
+let doorHis = doorCenters.map { $0 + doorWidth / 2 }
 let exitBuffer = 3.0 // m past the door the desired-direction target sits, so people aim *through* it
+
+/// Whether `y` falls inside any door opening (a gap in the right wall).
+@inline(__always)
+func inDoorGap(_ y: Double) -> Bool {
+    for i in doorLos.indices where y > doorLos[i] && y < doorHis[i] { return true }
+    return false
+}
+
+/// The opening (lo, hi) of the door nearest `y`. Each pedestrian heads for the door
+/// closest to their current position; ties go to the lower door. With a single door
+/// this always returns that door.
+@inline(__always)
+func nearestDoor(_ y: Double) -> (lo: Double, hi: Double) {
+    var best = 0
+    var bestDist = Double.greatestFiniteMagnitude
+    for i in doorCenters.indices {
+        let dist = abs(y - doorCenters[i])
+        if dist < bestDist {
+            bestDist = dist
+            best = i
+        }
+    }
+    return (doorLos[best], doorHis[best])
+}
 
 struct Vec2: Equatable {
 
@@ -375,11 +407,13 @@ func socialForce(
 // MARK: Driving force and walls (each depends only on the person itself)
 
 /// The force pulling a person toward the exit: relax the velocity toward
-/// `desiredSpeed` in the direction of a target sitting just outside the door. The
-/// target's y is clamped into the opening, so people funnel toward the gap.
+/// `desiredSpeed` in the direction of a target sitting just outside the door
+/// nearest them. The target's y is clamped into that opening, so people funnel
+/// toward the gap they are heading for.
 @inline(__always)
 func drivingForce(_ a: Agent) -> Vec2 {
-    let targetY = min(max(a.y, doorLo + radius), doorHi - radius)
+    let door = nearestDoor(a.y)
+    let targetY = min(max(a.y, door.lo + radius), door.hi - radius)
     var ex = (roomSize + exitBuffer) - a.x
     var ey = targetY - a.y
     let len = (ex * ex + ey * ey).squareRoot()
@@ -427,8 +461,8 @@ func postContribution(_ postX: Double, _ postY: Double, _ a: Agent) -> Vec2 {
     return wallContribution(d, nx, ny, a.vx, a.vy)
 }
 
-/// Total wall force: the four room walls (the right wall has a gap for the door)
-/// plus the two door-jamb posts.
+/// Total wall force: the four room walls (the right wall has a gap at each door)
+/// plus a jamb post on either side of every door.
 func wallForce(_ a: Agent) -> Vec2 {
     var fx = 0.0, fy = 0.0
     // Left wall (x = 0), inward normal +x.
@@ -443,19 +477,21 @@ func wallForce(_ a: Agent) -> Vec2 {
     f = wallContribution(roomSize - a.y, 0, -1, a.vx, a.vy)
     fx += f.x
     fy += f.y
-    // Right wall (x = roomSize), inward normal −x — solid except across the door.
-    if a.y <= doorLo || a.y >= doorHi {
+    // Right wall (x = roomSize), inward normal −x — solid except across the doors.
+    if !inDoorGap(a.y) {
         f = wallContribution(roomSize - a.x, -1, 0, a.vx, a.vy)
         fx += f.x
         fy += f.y
     }
-    // Door jambs.
-    f = postContribution(roomSize, doorLo, a)
-    fx += f.x
-    fy += f.y
-    f = postContribution(roomSize, doorHi, a)
-    fx += f.x
-    fy += f.y
+    // Door jambs — two posts per door, lower edge first so the sum order is fixed.
+    for i in doorLos.indices {
+        f = postContribution(roomSize, doorLos[i], a)
+        fx += f.x
+        fy += f.y
+        f = postContribution(roomSize, doorHis[i], a)
+        fx += f.x
+        fy += f.y
+    }
     return Vec2(x: fx, y: fy)
 }
 
@@ -587,7 +623,7 @@ func renderFrame(_ agents: [Agent], resolution: Int) -> [RGB] {
         stamp(t, 0, wallColor) // bottom
         stamp(t, roomSize, wallColor) // top
         stamp(0, t, wallColor) // left
-        if t <= doorLo || t >= doorHi { stamp(roomSize, t, wallColor) } // right (gapped)
+        if !inDoorGap(t) { stamp(roomSize, t, wallColor) } // right (gapped at each door)
     }
 
     // People.
@@ -660,9 +696,9 @@ func asciiRoom(_ agents: [Agent], columns: Int = 72) {
                 line.append(ramp[min(ramp.count - 1, Int(v * Double(ramp.count - 1) + 0.5))])
             }
         }
-        // World y at this row's centre — open the right wall across the door.
+        // World y at this row's centre — open the right wall across each door.
         let wy = (Double(rows - 1 - ry) + 0.5) / Double(rows) * roomSize
-        line.append(wy >= doorLo && wy <= doorHi ? " " : "|")
+        line.append(inDoorGap(wy) ? " " : "|")
         print(line)
     }
     print("+" + String(repeating: "-", count: cols) + "+")
@@ -684,7 +720,7 @@ func elapsedMilliseconds(since start: Date) -> Double {
 // MARK: Driver
 
 print(
-    "crowd \(n) people  room \(String(format: "%.0f", roomSize))m  door \(doorWidth)m  v0=\(desiredSpeed)  Barnes–Hut θ=\(theta)  maxVPs=\(maxVPs)  chunks=\(chunks)"
+    "crowd \(n) people  room \(String(format: "%.0f", roomSize))m  \(doors)×\(doorWidth)m door\(doors == 1 ? "" : "s")  v0=\(desiredSpeed)  Barnes–Hut θ=\(theta)  maxVPs=\(maxVPs)  chunks=\(chunks)"
 )
 
 var agents = makeAgents(n)
@@ -738,7 +774,7 @@ var totalEscaped = 0
 if steps > 0 {
     let saveNote = saveFrames ? ", saving every \(frameStride) step\(frameStride == 1 ? "" : "s") to \(outputDir)/" : ""
     print(
-        "\nevacuating \(n) people through a \(doorWidth)m door for \(steps) steps (\(String(format: "%.1f", Double(steps) * dt))s)\(saveNote)…"
+        "\nevacuating \(n) people through \(doors) \(doorWidth)m door\(doors == 1 ? "" : "s") for \(steps) steps (\(String(format: "%.1f", Double(steps) * dt))s)\(saveNote)…"
     )
     if saveFrames {
         try? FileManager.default.createDirectory(atPath: outputDir, withIntermediateDirectories: true)
