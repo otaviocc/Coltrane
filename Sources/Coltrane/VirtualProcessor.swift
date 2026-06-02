@@ -21,12 +21,9 @@
 // SOFTWARE.
 
 import Foundation
+import ColtraneHelpers
 
 // swiftlint:disable identifier_name
-
-#if canImport(Glibc)
-    import Glibc
-#endif
 
 /// One worker in the pool: a thread (or, for VP 0, the calling thread) that
 /// claims and runs jobs.
@@ -106,13 +103,9 @@ final class VirtualProcessor: @unchecked Sendable {
     }
 
     private func bindToCore(_ logicalId: Int) {
-        #if os(Linux)
-            var set = cpu_set_t()
-            let cpu = logicalId % max(1, ProcessInfo.processInfo.activeProcessorCount)
-            __CPU_SET(cpu, &set)
-            _ = pthread_setaffinity_np(pthread_self(), MemoryLayout<cpu_set_t>.size, &set)
-        #else
-            _ = logicalId
-        #endif
+        coltrane_bind_to_core(
+            Int32(logicalId),
+            Int32(ProcessInfo.processInfo.activeProcessorCount)
+        )
     }
 }

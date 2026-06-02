@@ -20,7 +20,11 @@ let package = Package(
         .executable(name: "RayTracerDemo", targets: ["RayTracerDemo"])
     ],
     targets: [
-        .target(name: "Coltrane"),
+        .target(
+            name: "Coltrane",
+            dependencies: ["ColtraneHelpers"]
+        ),
+        .target(name: "ColtraneHelpers"),
         .executableTarget(
             name: "FiboDemo",
             dependencies: ["Coltrane"]
