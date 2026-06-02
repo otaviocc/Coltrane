@@ -113,16 +113,20 @@ flowchart TB
             C2["fib(33)"]
             G1["fib(33)"]
             G2["fib(32)"]
+            G3["fib(32)"]
+            G4["fib(31)"]
             ROOT --> C1
             ROOT --> C2
             C1 --> G1
             C1 --> G2
+            C2 --> G3
+            C2 --> G4
         end
     end
     VP0 -. claim and run .-> ROOT
     VP1 -. claim and run .-> C1
     VP2 -. claim and run .-> C2
-    VP3 -. help .-> G1
+    VP3 -. claim and run .-> G1
 ```
 
 A joining VP never blocks while there is work to do: joining a task that another VP is already running, it helps by running other pending tasks, and only parks (briefly) once the subtree is fully in flight elsewhere. Here is a two-VP run of `a.join() + b.join()` from inside one `fibonacci` call:
