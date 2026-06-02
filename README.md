@@ -1,6 +1,6 @@
 # Coltrane
 
-A Swift runtime that builds on the ideas of **Anahy**, the multithreaded scheduling model described in [*Exploiting Multithreaded Programming on Cluster Architectures*](https://ieeexplore.ieee.org/abstract/document/1430058/) (HPCS 2005) and in [*Anahy: A Programming Environment for Cluster Computing*](https://link.springer.com/chapter/10.1007/978-3-540-71351-7_16) (VECPAR 2006): a library for describing application *concurrency* (logical threads and data dependencies) and letting a runtime schedule it onto the *parallelism* the hardware provides (real threads pinned to cores). Single-machine, multi-core. The cluster layer of the original model is out of scope.
+A Swift runtime that builds on the ideas of **Anahy**, the multithreaded scheduling model described in [*Exploiting Multithreaded Programming on Cluster Architectures*](https://ieeexplore.ieee.org/abstract/document/1430058/) (HPCS 2005) and in [*Anahy: A Programming Environment for Cluster Computing*](https://link.springer.com/chapter/10.1007/978-3-540-71351-7_16) (VECPAR 2006): a library for describing application *concurrency* (logical threads and data dependencies) and letting a runtime schedule it onto the *parallelism* the hardware provides (real threads, one per core, pinned to their core on Linux and placed by the OS scheduler on macOS). Single-machine, multi-core. The cluster layer of the original model is out of scope.
 
 You write `spawn`/`join` and never reason about cores or thread pools. The runtime builds a [**DAG**](https://en.wikipedia.org/wiki/Directed_acyclic_graph) of tasks implicitly from the nesting of `spawn` calls and schedules it onto a fixed pool of **Virtual Processors**, each a real OS thread with the pool sized to the core count by default, using **work-helping**: an idle or joining VP executes pending descendant tasks itself rather than blocking.
 
@@ -10,7 +10,7 @@ In other words, you focus on describing the concurrency of your application inst
 
 ## Installation
 
-Coltrane is a Swift package (Swift 6, macOS 13+). Add it to your `Package.swift`:
+Coltrane is a Swift package (Swift 6, macOS 13+ and Linux). Add it to your `Package.swift`:
 
 ```swift
 let package = Package(
