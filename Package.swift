@@ -17,7 +17,8 @@ let package = Package(
         .executable(name: "ReactionDiffusionDemo", targets: ["ReactionDiffusionDemo"]),
         .executable(name: "BlackScholesDemo", targets: ["BlackScholesDemo"]),
         .executable(name: "GameOfLifeDemo", targets: ["GameOfLifeDemo"]),
-        .executable(name: "RayTracerDemo", targets: ["RayTracerDemo"])
+        .executable(name: "RayTracerDemo", targets: ["RayTracerDemo"]),
+        .executable(name: "MatMulDemo", targets: ["MatMulDemo"])
     ],
     targets: [
         .target(
@@ -71,6 +72,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "RayTracerDemo",
+            dependencies: ["Coltrane"]
+        ),
+        .executableTarget(
+            name: "MatMulDemo",
             dependencies: ["Coltrane"]
         ),
         .testTarget(

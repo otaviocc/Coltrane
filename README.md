@@ -274,6 +274,15 @@ swift run -c release BlackScholesDemo 200000000 12
 
 Prices a European call by Monte Carlo. Like the π demo a reduction, but over floating-point payoffs: to stay bit-identical despite floating-point non-associativity, every method forms the same per-chunk partial sums and combines them in the same order. Prints the closed-form Black–Scholes price for reference. Arguments: `[samples] [maxVPs]`.
 
+### MatMulDemo
+
+```sh
+swift run -c release MatMulDemo
+swift run -c release MatMulDemo 1024 12
+```
+
+Dense square matrix multiply C = A·B, the classic fork/join throughput benchmark. Work splits into bands of output rows — coarse, uniform-cost jobs whose count scales with the VP count — and inside each band a cache-blocked `ikj` kernel keeps the working set in cache (the "tiled" part). The blocking is purely a locality optimisation: every `C[i][j]` is still summed in ascending-k order, identical to a naive triple loop, so all three methods produce the bit-identical matrix despite floating-point non-associativity. Prints `Σ C` as a checksum and GFLOP/s. `.anywhere` policy. Arguments: `[n] [maxVPs]`.
+
 ### RayTracerDemo
 
 ```sh
@@ -315,13 +324,14 @@ Measured on a MacBook Pro (Apple M4 Pro, 12 cores, 48 GB), release build, best o
 | N-Queens, n=15 | 714.4 | 74.5 | 715.9 | 362.4 | 193.4 | 128.5 | 99.6 | 86.6 | **78.3** |
 | Monte Carlo π, 100M samples | 367.6 | 38.6 | 367.4 | 187.9 | 95.1 | 64.5 | 49.5 | 44.3 | **40.3** |
 | Black–Scholes MC, 100M paths | 2104.4 | 222.1 | 2106.8 | 1072.9 | 546.4 | 364.5 | 274.7 | 246.6 | **223.6** |
+| Matrix multiply, 1024² | 332.9 | 45.5 | 343.3 | 172.3 | 89.8 | 64.9 | **45.7** | 46.6 | 45.7 |
 | Ray tracer, 1000×1000, 4 spp | 509.5 | 61.1 | 513.7 | 264.1 | 141.7 | 99.2 | 78.4 | 84.8 | **73.2** |
 | Reaction–diffusion, 1024², 1000 steps | 1647.8 | 265.2 | 1650.0 | 852.6 | 451.9 | 336.6 | **262.9** | 355.5 | 322.2 |
 | Game of Life, 2048², 300 gens | 3193.0 | 427.5 | 3171.1 | 1622.6 | 832.7 | 590.7 | **437.2** | 579.1 | 490.8 |
 
 At 1 VP Coltrane matches the sequential baseline (work runs inline on the calling thread). Scaling from there depends on the workload's shape.
 
-Compute-bound recursion and reductions (N-Queens, Monte Carlo, Black–Scholes) reach roughly 9x by 12 VPs and match `async`/`await`. Fine-grained data-parallel work with many tiny jobs (Mandelbrot rows, the ray tracer) gains a little less, where per-task overhead, not the runtime's throughput, sets the ceiling.
+Compute-bound recursion and reductions (N-Queens, Monte Carlo, Black–Scholes) reach roughly 9x by 12 VPs and match `async`/`await`. Fine-grained data-parallel work with many tiny jobs (Mandelbrot rows, the ray tracer) gains a little less, where per-task overhead, not the runtime's throughput, sets the ceiling. Matrix multiply matches `async`/`await` at its peak but plateaus around 8 VP: at 1024² the operands no longer fit in cache, so it turns memory-bandwidth bound and the extra cores have no bandwidth left to feed.
 
 The bulk-synchronous stencils (reaction–diffusion, Game of Life) re-fan-out every step. A parked processor is signalled the moment new work is spawned rather than waiting out an idle poll, so they now track `async`/`await` closely (within ~1.3x).
 
